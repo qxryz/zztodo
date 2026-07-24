@@ -1,11 +1,14 @@
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Project, STATUS_META } from "../types";
+import type { TagColors } from "../useTagColors";
 
 export function ProjectRow({
   project,
+  tagColors,
   onOpen,
 }: {
   project: Project;
+  tagColors: TagColors;
   onOpen: () => void;
 }) {
   const meta = STATUS_META[project.status];
@@ -19,14 +22,29 @@ export function ProjectRow({
     if (project.url) await openUrl(project.url).catch(() => {});
   };
 
+  const rowClass = ["row", project.pinned && "row--pinned"]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="row" onClick={onOpen}>
+    <div
+      className={rowClass}
+      onClick={onOpen}
+      style={{
+        ["--pin-c" as string]: tagColors.pinned,
+        ["--fav-c" as string]: tagColors.favorite,
+      }}
+    >
       <span className="status-badge" style={{ ["--c" as string]: meta.color }}>
         <span className="dot" style={{ background: meta.color }} />
         {meta.label}
       </span>
 
       <div className="row-main">
+        {project.pinned && <span className="row-icon">📌</span>}
+        {project.favorite && (
+          <span className="row-icon row-icon--favorite">★</span>
+        )}
         <span className="row-title">{project.name}</span>
         {project.description && (
           <span className="row-desc">{project.description}</span>

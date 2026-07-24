@@ -2,14 +2,17 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { Project, ProjectInput, Status, STATUS_META, emptyInput } from "../types";
+import type { TagColors } from "../useTagColors";
 
 export function Editor({
   project,
+  tagColors,
   onClose,
   onSave,
   onDelete,
 }: {
   project: Project | null;
+  tagColors: TagColors;
   onClose: () => void;
   onSave: (input: ProjectInput) => void;
   onDelete: (id: number) => void;
@@ -150,22 +153,22 @@ export function Editor({
           </div>
 
           <div className="field-row">
-            <label className="field checkbox">
-              <input
-                type="checkbox"
-                checked={form.pinned}
-                onChange={(e) => set("pinned", e.target.checked)}
-              />
-              <span>重点开发</span>
-            </label>
-            <label className="field checkbox">
-              <input
-                type="checkbox"
-                checked={form.favorite}
-                onChange={(e) => set("favorite", e.target.checked)}
-              />
-              <span>收藏</span>
-            </label>
+            <button
+              type="button"
+              className={`toggle-btn toggle-btn--pin${form.pinned ? " active" : ""}`}
+              style={{ ["--pin-c" as string]: tagColors.pinned }}
+              onClick={() => set("pinned", !form.pinned)}
+            >
+              📌 重点开发
+            </button>
+            <button
+              type="button"
+              className={`toggle-btn toggle-btn--fav${form.favorite ? " active" : ""}`}
+              style={{ ["--fav-c" as string]: tagColors.favorite }}
+              onClick={() => set("favorite", !form.favorite)}
+            >
+              ★ 收藏
+            </button>
           </div>
 
           <div className="field-row">

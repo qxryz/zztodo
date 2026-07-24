@@ -1,11 +1,14 @@
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Project, STATUS_META } from "../types";
+import type { TagColors } from "../useTagColors";
 
 export function ProjectCard({
   project,
+  tagColors,
   onOpen,
 }: {
   project: Project;
+  tagColors: TagColors;
   onOpen: () => void;
 }) {
   const meta = STATUS_META[project.status];
@@ -19,14 +22,30 @@ export function ProjectCard({
     if (project.url) await openUrl(project.url).catch(() => {});
   };
 
+  const cardClass = [
+    "card",
+    project.pinned && "card--pinned",
+    project.favorite && "card--favorite",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <article className="card" onClick={onOpen}>
+    <article
+      className={cardClass}
+      onClick={onOpen}
+      style={{
+        ["--pin-c" as string]: tagColors.pinned,
+        ["--fav-c" as string]: tagColors.favorite,
+      }}
+    >
       <div className="card-head">
         <span className="status-badge" style={{ ["--c" as string]: meta.color }}>
           <span className="dot" style={{ background: meta.color }} />
           {meta.label}
         </span>
         <span className="badge-group">
+          {project.favorite && <span className="fav-badge">★ 收藏</span>}
           {project.deployed && <span className="live-badge">● LIVE</span>}
           {project.open_source && <span className="oss-badge">⌥ OSS</span>}
         </span>

@@ -289,6 +289,28 @@ select {
   border-color: var(--border-strong);
   box-shadow: var(--shadow);
 }
+.card--pinned {
+  border-color: color-mix(in srgb, var(--pin-c) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pin-c) 25%, transparent),
+    0 4px 16px color-mix(in srgb, var(--pin-c) 18%, transparent);
+}
+.card--pinned:hover {
+  border-color: var(--pin-c);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pin-c) 45%, transparent),
+    0 8px 24px color-mix(in srgb, var(--pin-c) 30%, transparent);
+}
+.fav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(11px * var(--fs, 1));
+  font-weight: 700;
+  color: #fff;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--fav-c);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--fav-c) 45%, transparent);
+}
 .card-head {
   display: flex;
   align-items: center;
@@ -556,6 +578,30 @@ select {
   color: var(--text);
   font-weight: 500;
 }
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: calc(13px * var(--fs, 1));
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.toggle-btn--pin.active {
+  color: var(--pin-c);
+  border-color: var(--pin-c);
+  background: color-mix(in srgb, var(--pin-c) 14%, var(--bg-input));
+}
+.toggle-btn--fav.active {
+  color: #fff;
+  border-color: var(--fav-c);
+  background: var(--fav-c);
+}
 .folder-pick {
   display: flex;
   gap: 8px;
@@ -661,11 +707,13 @@ input[type="range"] {
   gap: 8px;
 }
 .row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 84px 1fr 90px 120px 68px;
   align-items: center;
   gap: 14px;
   background: var(--bg-card);
   border: 1px solid var(--border);
+  border-left: 4px solid transparent;
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   cursor: pointer;
@@ -675,17 +723,31 @@ input[type="range"] {
   border-color: var(--border-strong);
   box-shadow: var(--shadow);
 }
+.row--pinned {
+  border-left-color: var(--pin-c);
+}
+.row .status-badge {
+  justify-self: start;
+}
 .row-main {
-  flex: 1;
   min-width: 0;
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
+}
+.row-icon {
+  font-size: calc(12px * var(--fs, 1));
+  flex-shrink: 0;
+}
+.row-icon--favorite {
+  color: var(--fav-c);
 }
 .row-title {
   font-size: calc(14px * var(--fs, 1));
   font-weight: 600;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .row-desc {
   font-size: calc(12.5px * var(--fs, 1));
@@ -693,6 +755,7 @@ input[type="range"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 .row-tags {
   display: flex;
@@ -714,6 +777,7 @@ input[type="range"] {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+  justify-self: end;
 }
 
 /* ---------- tag color palette (settings) ---------- */

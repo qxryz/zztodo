@@ -146,6 +146,7 @@ export default function App() {
             <ProjectCard
               key={p.id}
               project={p}
+              tagColors={tagColors.colors}
               onOpen={() => setEditing(p)}
             />
           ))
@@ -154,6 +155,7 @@ export default function App() {
             <ProjectRow
               key={p.id}
               project={p}
+              tagColors={tagColors.colors}
               onOpen={() => setEditing(p)}
             />
           ))
@@ -163,6 +165,7 @@ export default function App() {
       {editing && (
         <Editor
           project={editing === "new" ? null : editing}
+          tagColors={tagColors.colors}
           onClose={() => setEditing(null)}
           onSave={save}
           onDelete={remove}
