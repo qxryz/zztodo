@@ -13,3 +13,6 @@ src-tauri/gen/schemas
 
 # updater signing key (keep secret, never commit)
 src-tauri/updater.key
+
+# superpowers dev specs (local planning docs, not for remote)
+docs/superpowers/
