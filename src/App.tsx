@@ -1,0 +1,150 @@
+import { useEffect, useMemo, useState } from "react";
+import { api } from "./api";
+import { Project, ProjectInput, Status, STATUS_META, Theme } from "./types";
+import { useTheme } from "./useTheme";
+import { ProjectCard } from "./components/ProjectCard";
+import { Editor } from "./components/Editor";
+import { ThemeSwitch } from "./components/ThemeSwitch";
+
+type Filter = "all" | Status;
+
+export default function App() {
+  const { theme, setTheme } = useTheme();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [editing, setEditing] = useState<Project | "new" | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = async () => {
+    setProjects(await api.list());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects.filter((p) => {
+      if (filter !== "all" && p.status !== filter) return false;
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.tech_stack.some((t) => t.toLowerCase().includes(q))
+      );
+    });
+  }, [projects, query, filter]);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: projects.length };
+    for (const p of projects) c[p.status] = (c[p.status] || 0) + 1;
+    return c;
+  }, [projects]);
+
+  const save = async (input: ProjectInput) => {
+    if (editing && editing !== "new") await api.update(editing.id, input);
+    else await api.create(input);
+    setEditing(null);
+    refresh();
+  };
+
+  const remove = async (id: number) => {
+    await api.remove(id);
+    setEditing(null);
+    refresh();
+  };
+
+  return (
+    <div className="app">
+      <header className="topbar" data-tauri-drag-region>
+        <div className="brand">
+          <span className="logo">zz</span>
+          <span className="brand-name">todo</span>
+        </div>
+        <div className="search">
+          <input
+            placeholder="搜索项目、技术栈…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="top-actions">
+          <ThemeSwitch theme={theme} onChange={(t: Theme) => setTheme(t)} />
+          <button className="btn primary" onClick={() => setEditing("new")}>
+            + 新建项目
+          </button>
+        </div>
+      </header>
+
+      <nav className="filters">
+        <FilterChip
+          label="全部"
+          active={filter === "all"}
+          count={counts.all || 0}
+          onClick={() => setFilter("all")}
+        />
+        {(Object.keys(STATUS_META) as Status[]).map((s) => (
+          <FilterChip
+            key={s}
+            label={STATUS_META[s].label}
+            color={STATUS_META[s].color}
+            active={filter === s}
+            count={counts[s] || 0}
+            onClick={() => setFilter(s)}
+          />
+        ))}
+      </nav>
+
+      <main className="grid">
+        {loading ? (
+          <div className="empty">加载中…</div>
+        ) : filtered.length === 0 ? (
+          <div className="empty">
+            <p>还没有项目</p>
+            <button className="btn primary" onClick={() => setEditing("new")}>
+              创建第一个项目
+            </button>
+          </div>
+        ) : (
+          filtered.map((p) => (
+            <ProjectCard key={p.id} project={p} onOpen={() => setEditing(p)} />
+          ))
+        )}
+      </main>
+
+      {editing && (
+        <Editor
+          project={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSave={save}
+          onDelete={remove}
+        />
+      )}
+    </div>
+  );
+}
+
+function FilterChip({
+  label,
+  count,
+  active,
+  color,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  color?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className={`chip ${active ? "active" : ""}`} onClick={onClick}>
+      {color && <span className="dot" style={{ background: color }} />}
+      {label}
+      <span className="chip-count">{count}</span>
+    </button>
+  );
+}
