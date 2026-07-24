@@ -8,6 +8,8 @@ export interface Project {
   deployed: boolean;
   deploy_method: string;
   open_source: boolean;
+  pinned: boolean;
+  favorite: boolean;
   url: string;
   repo: string;
   notes: string;
@@ -38,6 +40,15 @@ export type Theme = "light" | "dark" | "system";
 
 export type FontScale = "sm" | "md" | "lg";
 
+export type Layout = "grid" | "list";
+
+export type TagKey = "pinned" | "favorite";
+
+export const TAG_META: Record<TagKey, { label: string; defaultColor: string }> = {
+  pinned: { label: "重点开发", defaultColor: "#f0a742" },
+  favorite: { label: "收藏品", defaultColor: "#e05d9c" },
+};
+
 export function emptyInput(): ProjectInput {
   return {
     name: "",
@@ -48,6 +59,8 @@ export function emptyInput(): ProjectInput {
     deployed: false,
     deploy_method: "",
     open_source: false,
+    pinned: false,
+    favorite: false,
     url: "",
     repo: "",
     notes: "",

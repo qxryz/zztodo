@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { FontScale, Theme } from "../types";
+import { FontScale, TAG_META, TagKey, Theme } from "../types";
+import type { useTagColors } from "../useTagColors";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 const REPO = "qxryz/zztodo";
+const TAG_KEYS = Object.keys(TAG_META) as TagKey[];
 
 const FONT_OPTIONS: { value: FontScale; label: string }[] = [
   { value: "sm", label: "小" },
@@ -24,12 +26,14 @@ export function Settings({
   onThemeChange,
   fontScale,
   onFontScaleChange,
+  tagColors,
   onClose,
 }: {
   theme: Theme;
   onThemeChange: (t: Theme) => void;
   fontScale: FontScale;
   onFontScaleChange: (f: FontScale) => void;
+  tagColors: ReturnType<typeof useTagColors>;
   onClose: () => void;
 }) {
   const [version, setVersion] = useState("");
@@ -121,6 +125,63 @@ export function Settings({
               </button>
             </p>
           )}
+
+          <div className="settings-row tag-color-row">
+            <span>标签颜色</span>
+            <div className="tag-swatches">
+              {TAG_KEYS.map((k) => (
+                <label key={k} className="swatch" title={TAG_META[k].label}>
+                  <input
+                    type="color"
+                    value={tagColors.colors[k]}
+                    onChange={(e) => tagColors.setColor(k, e.target.value)}
+                  />
+                  <span
+                    className="swatch-dot"
+                    style={{ background: tagColors.colors[k] }}
+                  />
+                  <span className="swatch-label">{TAG_META[k].label}</span>
+                </label>
+              ))}
+              <button className="btn" onClick={tagColors.randomize}>
+                🎲 随机配色
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-row palette-row">
+            <span>保存配色</span>
+            <div className="palette-slots">
+              {Array.from({ length: tagColors.maxPalettes }).map((_, i) => (
+                <div key={i} className="palette-slot">
+                  <div className="palette-preview">
+                    {TAG_KEYS.map((k) => (
+                      <span
+                        key={k}
+                        className="palette-dot"
+                        style={{
+                          background: tagColors.palettes[i]?.[k] || "#ddd",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    className="mini"
+                    onClick={() => tagColors.saveToSlot(i)}
+                  >
+                    保存到 {i + 1}
+                  </button>
+                  <button
+                    className="mini"
+                    disabled={!tagColors.palettes[i]}
+                    onClick={() => tagColors.loadFromSlot(i)}
+                  >
+                    应用
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

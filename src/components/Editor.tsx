@@ -169,6 +169,25 @@ export function Editor({
           </div>
 
           <div className="field-row">
+            <label className="field checkbox">
+              <input
+                type="checkbox"
+                checked={form.pinned}
+                onChange={(e) => set("pinned", e.target.checked)}
+              />
+              <span>重点开发</span>
+            </label>
+            <label className="field checkbox">
+              <input
+                type="checkbox"
+                checked={form.favorite}
+                onChange={(e) => set("favorite", e.target.checked)}
+              />
+              <span>收藏品</span>
+            </label>
+          </div>
+
+          <div className="field-row">
             <label className="field">
               <span>部署方式</span>
               <input

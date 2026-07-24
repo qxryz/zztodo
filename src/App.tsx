@@ -3,7 +3,11 @@ import { api } from "./api";
 import { Project, ProjectInput, Status, STATUS_META } from "./types";
 import { useTheme } from "./useTheme";
 import { useFontScale } from "./useFontScale";
+import { useLayout } from "./useLayout";
+import { useTagColors } from "./useTagColors";
 import { ProjectCard } from "./components/ProjectCard";
+import { ProjectRow } from "./components/ProjectRow";
+import { LayoutSwitch } from "./components/LayoutSwitch";
 import { Editor } from "./components/Editor";
 import { Settings } from "./components/Settings";
 
@@ -12,6 +16,8 @@ type Filter = "all" | Status;
 export default function App() {
   const { theme, setTheme } = useTheme();
   const { fontScale, setFontScale } = useFontScale();
+  const { layout, setLayout } = useLayout();
+  const tagColors = useTagColors();
   const [projects, setProjects] = useState<Project[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -75,6 +81,7 @@ export default function App() {
           />
         </div>
         <div className="top-actions">
+          <LayoutSwitch layout={layout} onChange={setLayout} />
           <button
             className="icon-btn"
             title="设置"
@@ -107,7 +114,7 @@ export default function App() {
         ))}
       </nav>
 
-      <main className="grid">
+      <main className={layout === "grid" ? "grid" : "list"}>
         {loading ? (
           <div className="empty">加载中…</div>
         ) : filtered.length === 0 ? (
@@ -117,9 +124,23 @@ export default function App() {
               创建第一个项目
             </button>
           </div>
+        ) : layout === "grid" ? (
+          filtered.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              tagColors={tagColors.colors}
+              onOpen={() => setEditing(p)}
+            />
+          ))
         ) : (
           filtered.map((p) => (
-            <ProjectCard key={p.id} project={p} onOpen={() => setEditing(p)} />
+            <ProjectRow
+              key={p.id}
+              project={p}
+              tagColors={tagColors.colors}
+              onOpen={() => setEditing(p)}
+            />
           ))
         )}
       </main>
@@ -139,6 +160,7 @@ export default function App() {
           onThemeChange={setTheme}
           fontScale={fontScale}
           onFontScaleChange={setFontScale}
+          tagColors={tagColors}
           onClose={() => setSettingsOpen(false)}
         />
       )}
