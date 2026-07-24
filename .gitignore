@@ -10,3 +10,6 @@ src-tauri/gen/schemas
 # local env
 .env
 .env.local
+
+# updater signing key (keep secret, never commit)
+src-tauri/updater.key

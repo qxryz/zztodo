@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
-import { Project, ProjectInput, Status, STATUS_META } from "./types";
+import { Project, ProjectInput, Status, STATUS_META, TAG_META, TagKey } from "./types";
 import { useTheme } from "./useTheme";
 import { useFontScale } from "./useFontScale";
 import { useLayout } from "./useLayout";
@@ -11,7 +11,7 @@ import { LayoutSwitch } from "./components/LayoutSwitch";
 import { Editor } from "./components/Editor";
 import { Settings } from "./components/Settings";
 
-type Filter = "all" | Status;
+type Filter = "all" | Status | "pinned" | "favorite";
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -37,7 +37,10 @@ export default function App() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return projects.filter((p) => {
-      if (filter !== "all" && p.status !== filter) return false;
+      if (filter === "pinned" && !p.pinned) return false;
+      else if (filter === "favorite" && !p.favorite) return false;
+      else if (filter !== "all" && filter !== "pinned" && filter !== "favorite" && p.status !== filter)
+        return false;
       if (!q) return true;
       return (
         p.name.toLowerCase().includes(q) ||
@@ -48,8 +51,12 @@ export default function App() {
   }, [projects, query, filter]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: projects.length };
-    for (const p of projects) c[p.status] = (c[p.status] || 0) + 1;
+    const c: Record<string, number> = { all: projects.length, pinned: 0, favorite: 0 };
+    for (const p of projects) {
+      c[p.status] = (c[p.status] || 0) + 1;
+      if (p.pinned) c.pinned++;
+      if (p.favorite) c.favorite++;
+    }
     return c;
   }, [projects]);
 
@@ -112,6 +119,16 @@ export default function App() {
             onClick={() => setFilter(s)}
           />
         ))}
+        {(Object.keys(TAG_META) as TagKey[]).map((k) => (
+          <FilterChip
+            key={k}
+            label={TAG_META[k].label}
+            color={tagColors.colors[k]}
+            active={filter === k}
+            count={counts[k] || 0}
+            onClick={() => setFilter(k)}
+          />
+        ))}
       </nav>
 
       <main className={layout === "grid" ? "grid" : "list"}>
@@ -129,7 +146,6 @@ export default function App() {
             <ProjectCard
               key={p.id}
               project={p}
-              tagColors={tagColors.colors}
               onOpen={() => setEditing(p)}
             />
           ))
@@ -138,7 +154,6 @@ export default function App() {
             <ProjectRow
               key={p.id}
               project={p}
-              tagColors={tagColors.colors}
               onOpen={() => setEditing(p)}
             />
           ))

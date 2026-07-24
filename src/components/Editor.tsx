@@ -153,6 +153,25 @@ export function Editor({
             <label className="field checkbox">
               <input
                 type="checkbox"
+                checked={form.pinned}
+                onChange={(e) => set("pinned", e.target.checked)}
+              />
+              <span>重点开发</span>
+            </label>
+            <label className="field checkbox">
+              <input
+                type="checkbox"
+                checked={form.favorite}
+                onChange={(e) => set("favorite", e.target.checked)}
+              />
+              <span>收藏</span>
+            </label>
+          </div>
+
+          <div className="field-row">
+            <label className="field checkbox">
+              <input
+                type="checkbox"
                 checked={form.deployed}
                 onChange={(e) => set("deployed", e.target.checked)}
               />
@@ -165,25 +184,6 @@ export function Editor({
                 onChange={(e) => set("open_source", e.target.checked)}
               />
               <span>已开源</span>
-            </label>
-          </div>
-
-          <div className="field-row">
-            <label className="field checkbox">
-              <input
-                type="checkbox"
-                checked={form.pinned}
-                onChange={(e) => set("pinned", e.target.checked)}
-              />
-              <span>重点开发</span>
-            </label>
-            <label className="field checkbox">
-              <input
-                type="checkbox"
-                checked={form.favorite}
-                onChange={(e) => set("favorite", e.target.checked)}
-              />
-              <span>收藏品</span>
             </label>
           </div>
 

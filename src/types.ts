@@ -46,7 +46,7 @@ export type TagKey = "pinned" | "favorite";
 
 export const TAG_META: Record<TagKey, { label: string; defaultColor: string }> = {
   pinned: { label: "重点开发", defaultColor: "#f0a742" },
-  favorite: { label: "收藏品", defaultColor: "#e05d9c" },
+  favorite: { label: "收藏", defaultColor: "#e05d9c" },
 };
 
 export function emptyInput(): ProjectInput {

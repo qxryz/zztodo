@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { FontScale, TAG_META, TagKey, Theme } from "../types";
 import type { useTagColors } from "../useTagColors";
 import { ThemeSwitch } from "./ThemeSwitch";
 
-const REPO = "qxryz/zztodo";
 const TAG_KEYS = Object.keys(TAG_META) as TagKey[];
 
 const FONT_OPTIONS: { value: FontScale; label: string }[] = [
@@ -18,7 +18,9 @@ type UpdateState =
   | { kind: "idle" }
   | { kind: "checking" }
   | { kind: "latest" }
-  | { kind: "available"; version: string; url: string }
+  | { kind: "available"; version: string; update: Update }
+  | { kind: "downloading"; progress: number }
+  | { kind: "ready" }
   | { kind: "error" };
 
 export function Settings({
@@ -46,18 +48,35 @@ export function Settings({
   const checkForUpdates = async () => {
     setUpdate({ kind: "checking" });
     try {
-      const res = await fetch(
-        `https://api.github.com/repos/${REPO}/releases/latest`
-      );
-      if (!res.ok) throw new Error("bad response");
-      const data = await res.json();
-      const latest = String(data.tag_name || "").replace(/^v/, "");
-      const current = await getVersion();
-      if (latest && latest !== current) {
-        setUpdate({ kind: "available", version: latest, url: data.html_url });
+      const result = await check();
+      if (result) {
+        setUpdate({ kind: "available", version: result.version, update: result });
       } else {
         setUpdate({ kind: "latest" });
       }
+    } catch {
+      setUpdate({ kind: "error" });
+    }
+  };
+
+  const installUpdate = async (update: Update) => {
+    setUpdate({ kind: "downloading", progress: 0 });
+    try {
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength || 0;
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          setUpdate({
+            kind: "downloading",
+            progress: total ? Math.round((downloaded / total) * 100) : 0,
+          });
+        }
+      });
+      setUpdate({ kind: "ready" });
+      await relaunch();
     } catch {
       setUpdate({ kind: "error" });
     }
@@ -119,11 +138,17 @@ export function Settings({
               发现新版本 v{update.version}，
               <button
                 className="link-btn"
-                onClick={() => openUrl(update.url).catch(() => {})}
+                onClick={() => installUpdate(update.update)}
               >
-                前往下载
+                立即更新
               </button>
             </p>
+          )}
+          {update.kind === "downloading" && (
+            <p className="update-hint available">下载中… {update.progress}%</p>
+          )}
+          {update.kind === "ready" && (
+            <p className="update-hint ok">安装完成，正在重启…</p>
           )}
 
           <div className="settings-row tag-color-row">

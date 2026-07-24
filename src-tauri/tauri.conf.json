@@ -35,6 +35,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/qxryz/zztodo/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE4OUY0RjI0MUFEOEJGNjIKUldSaXY5Z2FKRStmcU40TXJaMmh4NC83YmltL25MMDZlbHRGR2ROeTF4Ym9HeTZPQUZBUEYzemYK"
+    }
   }
 }
