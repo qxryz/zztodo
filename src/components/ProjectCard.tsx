@@ -26,7 +26,10 @@ export function ProjectCard({
           <span className="dot" style={{ background: meta.color }} />
           {meta.label}
         </span>
-        {project.deployed && <span className="live-badge">● LIVE</span>}
+        <span className="badge-group">
+          {project.deployed && <span className="live-badge">● LIVE</span>}
+          {project.open_source && <span className="oss-badge">⌥ OSS</span>}
+        </span>
       </div>
 
       <h3 className="card-title">{project.name}</h3>

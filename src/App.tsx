@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
-import { Project, ProjectInput, Status, STATUS_META, Theme } from "./types";
+import { Project, ProjectInput, Status, STATUS_META } from "./types";
 import { useTheme } from "./useTheme";
+import { useFontScale } from "./useFontScale";
 import { ProjectCard } from "./components/ProjectCard";
 import { Editor } from "./components/Editor";
-import { ThemeSwitch } from "./components/ThemeSwitch";
+import { Settings } from "./components/Settings";
 
 type Filter = "all" | Status;
 
 export default function App() {
   const { theme, setTheme } = useTheme();
+  const { fontScale, setFontScale } = useFontScale();
   const [projects, setProjects] = useState<Project[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<Project | "new" | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
@@ -72,7 +75,13 @@ export default function App() {
           />
         </div>
         <div className="top-actions">
-          <ThemeSwitch theme={theme} onChange={(t: Theme) => setTheme(t)} />
+          <button
+            className="icon-btn"
+            title="设置"
+            onClick={() => setSettingsOpen(true)}
+          >
+            ⚙
+          </button>
           <button className="btn primary" onClick={() => setEditing("new")}>
             + 新建项目
           </button>
@@ -121,6 +130,16 @@ export default function App() {
           onClose={() => setEditing(null)}
           onSave={save}
           onDelete={remove}
+        />
+      )}
+
+      {settingsOpen && (
+        <Settings
+          theme={theme}
+          onThemeChange={setTheme}
+          fontScale={fontScale}
+          onFontScaleChange={setFontScale}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>

@@ -16,6 +16,7 @@ fn row_to_project(row: &Row) -> rusqlite::Result<Project> {
         status: row.get("status")?,
         deployed: row.get::<_, i64>("deployed")? != 0,
         deploy_method: row.get("deploy_method")?,
+        open_source: row.get::<_, i64>("open_source")? != 0,
         url: row.get("url")?,
         repo: row.get("repo")?,
         notes: row.get("notes")?,
@@ -44,7 +45,14 @@ pub fn init(conn: &Connection) -> rusqlite::Result<()> {
             created_at    TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
          );",
-    )
+    )?;
+    let has_open_source: bool = conn
+        .prepare("SELECT 1 FROM pragma_table_info('projects') WHERE name='open_source'")?
+        .exists([])?;
+    if !has_open_source {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN open_source INTEGER NOT NULL DEFAULT 0;")?;
+    }
+    Ok(())
 }
 
 pub fn list(conn: &Connection) -> rusqlite::Result<Vec<Project>> {
@@ -60,9 +68,9 @@ pub fn list(conn: &Connection) -> rusqlite::Result<Vec<Project>> {
 pub fn create(conn: &Connection, p: &ProjectInput) -> rusqlite::Result<Project> {
     let tech = serde_json::to_string(&p.tech_stack).unwrap_or_else(|_| "[]".into());
     conn.execute(
-        "INSERT INTO projects (name, folder, description, tech_stack, status, deployed, deploy_method, url, repo, notes, progress)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
-        params![p.name, p.folder, p.description, tech, p.status, p.deployed as i64, p.deploy_method, p.url, p.repo, p.notes, p.progress],
+        "INSERT INTO projects (name, folder, description, tech_stack, status, deployed, deploy_method, open_source, url, repo, notes, progress)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+        params![p.name, p.folder, p.description, tech, p.status, p.deployed as i64, p.deploy_method, p.open_source as i64, p.url, p.repo, p.notes, p.progress],
     )?;
     let id = conn.last_insert_rowid();
     get(conn, id)
@@ -72,9 +80,9 @@ pub fn update(conn: &Connection, id: i64, p: &ProjectInput) -> rusqlite::Result<
     let tech = serde_json::to_string(&p.tech_stack).unwrap_or_else(|_| "[]".into());
     conn.execute(
         "UPDATE projects SET name=?1, folder=?2, description=?3, tech_stack=?4, status=?5,
-         deployed=?6, deploy_method=?7, url=?8, repo=?9, notes=?10, progress=?11,
-         updated_at=datetime('now') WHERE id=?12",
-        params![p.name, p.folder, p.description, tech, p.status, p.deployed as i64, p.deploy_method, p.url, p.repo, p.notes, p.progress, id],
+         deployed=?6, deploy_method=?7, open_source=?8, url=?9, repo=?10, notes=?11, progress=?12,
+         updated_at=datetime('now') WHERE id=?13",
+        params![p.name, p.folder, p.description, tech, p.status, p.deployed as i64, p.deploy_method, p.open_source as i64, p.url, p.repo, p.notes, p.progress, id],
     )?;
     get(conn, id)
 }

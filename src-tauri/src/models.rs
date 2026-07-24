@@ -17,6 +17,8 @@ pub struct Project {
     pub deployed: bool,
     /// How it's deployed (e.g. Vercel, VPS, App Store...).
     pub deploy_method: String,
+    /// Whether the project has been open-sourced.
+    pub open_source: bool,
     /// Live URL, if any.
     pub url: String,
     /// Git remote / repository URL.
@@ -38,6 +40,7 @@ pub struct ProjectInput {
     pub status: String,
     pub deployed: bool,
     pub deploy_method: String,
+    pub open_source: bool,
     pub url: String,
     pub repo: String,
     pub notes: String,

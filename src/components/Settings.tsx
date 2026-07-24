@@ -1,0 +1,128 @@
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { FontScale, Theme } from "../types";
+import { ThemeSwitch } from "./ThemeSwitch";
+
+const REPO = "qxryz/zztodo";
+
+const FONT_OPTIONS: { value: FontScale; label: string }[] = [
+  { value: "sm", label: "小" },
+  { value: "md", label: "中" },
+  { value: "lg", label: "大" },
+];
+
+type UpdateState =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "latest" }
+  | { kind: "available"; version: string; url: string }
+  | { kind: "error" };
+
+export function Settings({
+  theme,
+  onThemeChange,
+  fontScale,
+  onFontScaleChange,
+  onClose,
+}: {
+  theme: Theme;
+  onThemeChange: (t: Theme) => void;
+  fontScale: FontScale;
+  onFontScaleChange: (f: FontScale) => void;
+  onClose: () => void;
+}) {
+  const [version, setVersion] = useState("");
+  const [update, setUpdate] = useState<UpdateState>({ kind: "idle" });
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
+  const checkForUpdates = async () => {
+    setUpdate({ kind: "checking" });
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${REPO}/releases/latest`
+      );
+      if (!res.ok) throw new Error("bad response");
+      const data = await res.json();
+      const latest = String(data.tag_name || "").replace(/^v/, "");
+      const current = await getVersion();
+      if (latest && latest !== current) {
+        setUpdate({ kind: "available", version: latest, url: data.html_url });
+      } else {
+        setUpdate({ kind: "latest" });
+      }
+    } catch {
+      setUpdate({ kind: "error" });
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <h2>设置</h2>
+          <button className="icon-btn" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+
+        <div className="modal-body">
+          <div className="settings-row">
+            <span>主题</span>
+            <ThemeSwitch theme={theme} onChange={onThemeChange} />
+          </div>
+
+          <div className="settings-row">
+            <span>字号</span>
+            <div className="segmented">
+              {FONT_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  className={`segmented-opt ${fontScale === o.value ? "active" : ""}`}
+                  onClick={() => onFontScaleChange(o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <span>版本</span>
+            <div className="update-check">
+              <span className="version-num">v{version}</span>
+              <button
+                className="btn"
+                onClick={checkForUpdates}
+                disabled={update.kind === "checking"}
+              >
+                {update.kind === "checking" ? "检查中…" : "检查更新"}
+              </button>
+            </div>
+          </div>
+
+          {update.kind === "latest" && (
+            <p className="update-hint ok">已是最新版本</p>
+          )}
+          {update.kind === "error" && (
+            <p className="update-hint err">检查失败，请稍后重试</p>
+          )}
+          {update.kind === "available" && (
+            <p className="update-hint available">
+              发现新版本 v{update.version}，
+              <button
+                className="link-btn"
+                onClick={() => openUrl(update.url).catch(() => {})}
+              >
+                前往下载
+              </button>
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

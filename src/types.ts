@@ -7,6 +7,7 @@ export interface Project {
   status: Status;
   deployed: boolean;
   deploy_method: string;
+  open_source: boolean;
   url: string;
   repo: string;
   notes: string;
@@ -35,6 +36,8 @@ export const STATUS_META: Record<Status, { label: string; color: string }> = {
 
 export type Theme = "light" | "dark" | "system";
 
+export type FontScale = "sm" | "md" | "lg";
+
 export function emptyInput(): ProjectInput {
   return {
     name: "",
@@ -44,6 +47,7 @@ export function emptyInput(): ProjectInput {
     status: "active",
     deployed: false,
     deploy_method: "",
+    open_source: false,
     url: "",
     repo: "",
     notes: "",

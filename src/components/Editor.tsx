@@ -158,12 +158,31 @@ export function Editor({
               />
               <span>已上线</span>
             </label>
+            <label className="field checkbox">
+              <input
+                type="checkbox"
+                checked={form.open_source}
+                onChange={(e) => set("open_source", e.target.checked)}
+              />
+              <span>已开源</span>
+            </label>
+          </div>
+
+          <div className="field-row">
             <label className="field">
               <span>部署方式</span>
               <input
                 value={form.deploy_method}
                 onChange={(e) => set("deploy_method", e.target.value)}
                 placeholder="Vercel / VPS / App Store…"
+              />
+            </label>
+            <label className="field">
+              <span>仓库地址</span>
+              <input
+                value={form.repo}
+                onChange={(e) => set("repo", e.target.value)}
+                placeholder="git remote"
               />
             </label>
           </div>
@@ -174,15 +193,6 @@ export function Editor({
               value={form.url}
               onChange={(e) => set("url", e.target.value)}
               placeholder="https://…"
-            />
-          </label>
-
-          <label className="field">
-            <span>仓库地址</span>
-            <input
-              value={form.repo}
-              onChange={(e) => set("repo", e.target.value)}
-              placeholder="git remote"
             />
           </label>
 
