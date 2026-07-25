@@ -33,6 +33,10 @@ pub struct KeyEntry {
     pub docs_url: String,
     pub console_url: String,
     pub purpose: String,
+    /// `model_id` was added in v0.1.6 — older vaults serialized before then
+    /// don't have the key, so we must default it to "" instead of failing
+    /// (which used to surface as a misleading "wrong password" error).
+    #[serde(default)]
     pub model_id: String,
     pub tags: Vec<String>,
     pub username: String,
@@ -230,5 +234,58 @@ mod tests {
         let b = enc(&data, "hunter2");
         // salt || nonce region must differ between saves
         assert_ne!(a[20..20 + SALT_LEN + NONCE_LEN], b[20..20 + SALT_LEN + NONCE_LEN]);
+    }
+
+    /// A vault that was saved by an older app build (no `model_id`, has the
+    /// removed `used_in` field) must still decrypt with the same password.
+    /// Without `#[serde(default)]` on `model_id`, the deserialize step would
+    /// fail and the user would see "wrong password" — the symptom that
+    /// prompted v0.1.6.1.
+    #[test]
+    fn old_format_entries_decrypt_without_model_id() {
+        // Hand-roll the legacy JSON shape, including the field we removed
+        // (`used_in`). serde ignores unknown fields and the new
+        // `#[serde(default)] model_id` defaults to empty.
+        let legacy_json = r#"{
+            "version": 1,
+            "next_id": 2,
+            "providers": [],
+            "entries": [
+                {
+                    "id": 1,
+                    "title": "Legacy OpenAI",
+                    "project_ids": [],
+                    "base_url": "https://api.openai.com/v1",
+                    "docs_url": "",
+                    "console_url": "",
+                    "purpose": "test",
+                    "used_in": "old field, should not block decryption",
+                    "tags": ["legacy"],
+                    "username": "",
+                    "env_var": "OPENAI_API_KEY",
+                    "notes": "",
+                    "secret": "sk-legacy",
+                    "attachments": [],
+                    "created_at": "2026-07-01T00:00:00Z",
+                    "updated_at": "2026-07-01T00:00:00Z"
+                }
+            ]
+        }"#;
+        let legacy: VaultData = serde_json::from_str(legacy_json).unwrap();
+
+        let bytes = enc(&legacy, "correct horse battery staple");
+        let back = decrypt_vault(&bytes, "correct horse battery staple")
+            .expect("legacy vault must decrypt with the user's password");
+
+        let e = &back.entries[0];
+        assert_eq!(e.title, "Legacy OpenAI");
+        // The removed field is silently dropped, the new one defaults to "".
+        assert_eq!(e.model_id, "");
+        assert_eq!(e.secret, "sk-legacy");
+        assert_eq!(e.tags, vec!["legacy".to_string()]);
+
+        // Wrong password still has to surface as the old ERR_BAD_PASSWORD.
+        let err = decrypt_vault(&bytes, "definitely not it").unwrap_err();
+        assert_eq!(err, ERR_BAD_PASSWORD);
     }
 }
