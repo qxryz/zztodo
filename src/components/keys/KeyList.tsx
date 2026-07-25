@@ -6,7 +6,7 @@ import type { Project } from "../../types";
 import { vaultApi } from "../../vault/api";
 import { copySecret, copyText, SECRET_TTL_SECONDS } from "../../vault/clipboard";
 import { formatBytes, type EntryMeta, type VaultStatus } from "../../vault/types";
-import { COL_KEYS, type ColKey } from "../../vault/useKeyColumnWidths";
+import { COL_KEYS, DEFAULT_COL_WIDTHS, type ColKey } from "../../vault/useKeyColumnWidths";
 import { KeyRow } from "./KeyRow";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyEditor } from "./KeyEditor";
@@ -198,6 +198,8 @@ export function KeyList({
     { label: "删除", separatorBefore: true, danger: true, onClick: remove(entry) },
   ];
 
+  const rowColumnStyle = cssVars(columnWidths);
+
   return (
     <>
       <div className="key-toolbar">
@@ -282,7 +284,7 @@ export function KeyList({
               entry={e}
               projects={projects}
               selected={selected === e.id}
-              columnStyle={cssVars(columnWidths)}
+              columnStyle={rowColumnStyle}
               onSelect={() => setSelected(e.id)}
               onOpen={() => setEditing(e)}
               onContextMenu={(ev) => {
@@ -344,20 +346,38 @@ export function KeyList({
  * Translate column widths into CSS variables that `KeyRow` consumes. Each
  * column declares its own `--col-<key>` variable so a single drag can target
  * exactly one width while leaving siblings at their own widths.
+ *
+ * The entry column is the one exception: it always gets `minmax(width, 1fr)`
+ * rather than a literal width, so it absorbs whatever space the other
+ * (fixed-width, content-sized) columns don't need instead of leaving the row
+ * short of the container's full width on a wide window.
  */
 function cssVars(widths: Record<ColKey, number>): CSSProperties {
   // CSSProperties doesn't index custom properties; cast to the loose shape
   // we know the row's CSS reads.
   const out = {} as CSSProperties & Record<`--col-${ColKey}`, string>;
-  for (const k of COL_KEYS) out[`--col-${k}`] = `${widths[k]}px`;
+  for (const k of COL_KEYS) {
+    out[`--col-${k}`] = k === "entry" ? `minmax(${widths[k]}px, 1fr)` : `${widths[k]}px`;
+  }
   return out;
 }
 
+const COL_LABELS: Record<ColKey, string> = {
+  entry: "标题",
+  projects: "项目",
+  tags: "标签",
+  env: "环境变量",
+  model: "模型",
+  actions: "操作",
+  updated: "更新时间",
+};
+
 /**
- * Thin strip that sits above the rows and exposes one drag handle per
- * column boundary. Drag updates the relevant column width via
- * `onResize`. Only the first boundary is draggable per cell so handles
- * don't overlap.
+ * Header row above the list: shows each column's name and, at every
+ * boundary but the last, a drag handle that resizes the column to its left.
+ * Double-clicking a handle resets just that column back to its default width
+ * — the same escape hatch spreadsheet/file-manager column headers offer,
+ * without a trip to Settings.
  */
 function ColumnResizeStrip({
   widths,
@@ -391,15 +411,21 @@ function ColumnResizeStrip({
   };
 
   return (
-    <div className="key-col-strip" style={cssVars(widths)} aria-hidden="true">
+    <div className="key-col-strip" style={cssVars(widths)}>
       {COL_KEYS.map((k) => (
         <div key={k} className={`key-col-strip-cell key-col-strip-cell--${k}`}>
+          <span className="key-col-label">{COL_LABELS[k]}</span>
           {COL_KEYS.indexOf(k) < COL_KEYS.length - 1 && (
             <div
               className="key-col-handle"
               role="separator"
               aria-orientation="vertical"
+              title="拖动调整列宽，双击恢复默认"
               onMouseDown={(e) => startDrag(e, k)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onResize(k, DEFAULT_COL_WIDTHS[k]);
+              }}
             />
           )}
         </div>

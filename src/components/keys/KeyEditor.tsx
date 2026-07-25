@@ -69,7 +69,22 @@ export function KeyEditor({
     setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    vaultApi.listProviders().then(setCustomProviders).catch(() => {});
+    vaultApi.listProviders().then((list) => {
+      setCustomProviders(list);
+      // An existing entry doesn't store its own auth style — only provider
+      // templates do (v0.1.10) — so reopening one for editing always starts
+      // the fetch-protocol toggle at "openai". If the baseurl matches a known
+      // template, recover the right style instead of silently defaulting to
+      // Bearer auth and failing on the first "拉取模型" click.
+      if (entry) {
+        const norm = (u: string) => u.trim().replace(/\/+$/, "");
+        const match = providerOptions(list).find(
+          (p) => norm(p.base_url) === norm(entry.base_url),
+        );
+        if (match) setFetchProtocol(match.auth_style);
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

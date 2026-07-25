@@ -1048,15 +1048,34 @@ input[type="range"] {
     var(--col-actions, 84px)
     var(--col-updated, 78px);
   gap: 12px;
-  /* Tall enough to be obviously clickable, with a visible grip pattern. */
-  height: 22px;
-  margin: 0 20px;
+  height: 28px;
+  /* Matches the key-row's own inset (border-left 4px + padding 14px = 18px on
+     the left; border-right 1px + padding 14px = 15px on the right) added on
+     top of the list container's 20px padding, so header cells line up with
+     the actual column boundaries in the rows below instead of drifting ~15px
+     off from them. */
+  margin: 0 35px 0 38px;
   user-select: none;
 }
 .key-col-strip-cell {
   position: relative;
   height: 100%;
+  display: flex;
+  align-items: center;
   border-bottom: 1px solid var(--border);
+}
+.key-col-strip-cell--actions,
+.key-col-strip-cell--updated {
+  justify-content: flex-end;
+}
+.key-col-label {
+  font-size: calc(11px * var(--fs, 1));
+  font-weight: 650;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
 }
 .key-col-handle {
   position: absolute;

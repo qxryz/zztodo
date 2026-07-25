@@ -566,6 +566,18 @@ impl FetchProtocol {
     }
 }
 
+/// Recognise any path segment that looks like an API version — `v1`, `v2`,
+/// `v3`, `v1beta`, `v2alpha`, etc. Used to decide whether an Anthropic-style
+/// baseurl already has a version segment before we inject a default `/v1`.
+fn is_version_segment(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some('v') | Some('V') => {}
+        _ => return false,
+    }
+    chars.any(|c| c.is_ascii_digit())
+}
+
 fn join_models_url(base_url: &str, is_anthropic: bool) -> Result<String, String> {
     let trimmed = base_url.trim();
     if trimmed.is_empty() {
@@ -577,12 +589,14 @@ fn join_models_url(base_url: &str, is_anthropic: bool) -> Result<String, String>
         .path_segments()
         .map(|s| s.filter(|p| !p.is_empty()).map(String::from).collect())
         .unwrap_or_default();
-    // Anthropic-compatible `/models` endpoints live under `/v1/models`.
-    // When the caller's baseurl omits the `/v1` segment (typical of a
-    // gateway root, e.g. `https://api.minimaxi.com/anthropic` instead of
-    // `…/anthropic/v1`), inject it so we hit the real endpoint instead of
-    // getting a 404 on `…/anthropic/models`.
-    if is_anthropic && !segs.iter().any(|s| s == "v1") {
+    // Anthropic's official SDK treats baseurl as the bare host and appends
+    // `/v1/...` itself, so a baseurl missing any version segment (typical of
+    // a gateway root, e.g. `https://api.minimaxi.com/anthropic`) needs `/v1`
+    // injected to reach the real endpoint. OpenAI-compatible SDKs work the
+    // opposite way — baseurl already includes the version
+    // (`https://api.openai.com/v1`) — so we never auto-inject for them; the
+    // caller is responsible for the exact path, same as calling the real API.
+    if is_anthropic && !segs.iter().any(|s| is_version_segment(s)) {
         segs.push("v1".to_string());
     }
     segs.push("models".to_string());
