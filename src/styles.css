@@ -1009,6 +1009,57 @@ input[type="range"] {
 .chip--tag {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- filter dropdowns (project / custom tag / payment method) ---------- */
+.filter-dropdown {
+  position: relative;
+}
+.filter-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-caret {
+  font-size: calc(9px * var(--fs, 1));
+  color: var(--text-dim);
+}
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.3);
+}
+.filter-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: calc(12.5px * var(--fs, 1));
+  text-align: left;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.filter-dropdown-item:hover {
+  background: var(--bg-input);
+}
+.filter-dropdown-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .key-list {
   gap: 6px;
 }
@@ -1036,8 +1087,8 @@ input[type="range"] {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* ---------- column resize strip ---------- */
-.key-col-strip {
+/* ---------- column header (text labels only) ---------- */
+.key-col-header {
   display: grid;
   grid-template-columns:
     var(--col-entry, minmax(160px, 1.6fr))
@@ -1048,25 +1099,24 @@ input[type="range"] {
     var(--col-actions, 84px)
     var(--col-updated, 78px);
   gap: 12px;
-  height: 28px;
+  align-items: center;
+  height: 22px;
   /* Matches the key-row's own inset (border-left 4px + padding 14px = 18px on
      the left; border-right 1px + padding 14px = 15px on the right) added on
      top of the list container's 20px padding, so header cells line up with
      the actual column boundaries in the rows below instead of drifting ~15px
      off from them. */
   margin: 0 35px 0 38px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--border);
   user-select: none;
 }
-.key-col-strip-cell {
-  position: relative;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
+.key-col-header-cell {
+  min-width: 0;
 }
-.key-col-strip-cell--actions,
-.key-col-strip-cell--updated {
-  justify-content: flex-end;
+.key-col-header-cell--actions,
+.key-col-header-cell--updated {
+  text-align: right;
 }
 .key-col-label {
   font-size: calc(11px * var(--fs, 1));
@@ -1077,41 +1127,59 @@ input[type="range"] {
   text-overflow: ellipsis;
   letter-spacing: 0.02em;
 }
-.key-col-handle {
+
+/* ---------- column-boundary guides (full list height, not just header) ---------- */
+.key-table-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.key-col-lines {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns:
+    var(--col-entry, minmax(160px, 1.6fr))
+    var(--col-projects, minmax(60px, 0.9fr))
+    var(--col-tags, minmax(60px, 0.9fr))
+    var(--col-env, 132px)
+    var(--col-model, minmax(120px, 1fr))
+    var(--col-actions, 84px)
+    var(--col-updated, 78px);
+  gap: 12px;
+  /* Same insets as the header above, so the lines land exactly on the
+     boundaries between the row cells they're meant to resize. */
+  margin: 0 35px 0 38px;
+  pointer-events: none;
+  z-index: 5;
+}
+.key-col-lines-cell {
+  position: relative;
+  height: 100%;
+}
+.key-col-line {
   position: absolute;
   top: 0;
+  bottom: 0;
   right: -10px;
   width: 20px;
-  height: 100%;
   cursor: col-resize;
-  z-index: 2;
+  pointer-events: auto;
   display: flex;
-  align-items: center;
   justify-content: center;
 }
-/* Always-visible central divider so the user can find the handles. */
-.key-col-handle::after {
+.key-col-line::after {
   content: "";
-  width: 2px;
-  height: 14px;
-  background: var(--border-strong);
-  border-radius: 1px;
-  box-shadow:
-    4px 0 0 var(--border-strong),
-    -4px 0 0 var(--border-strong);
-  transition: background 0.12s, width 0.12s, box-shadow 0.12s;
+  width: 1px;
+  height: 100%;
+  background: var(--border);
+  transition: background 0.12s, width 0.12s;
 }
-.key-col-handle:hover::after {
+.key-col-line:hover::after {
   background: var(--accent);
-  width: 3px;
-  box-shadow:
-    5px 0 0 var(--accent),
-    -5px 0 0 var(--accent);
-}
-/* Slightly nudge the strip's bottom border into accent on hover too, so the
-   whole row divider feels "alive" when the cursor is near a handle. */
-.key-col-strip:hover .key-col-strip-cell {
-  border-bottom-color: var(--border-strong);
+  width: 2px;
 }
 .key-row:hover {
   border-color: var(--border-strong);
@@ -1575,4 +1643,8 @@ input[type="range"] {
   border-radius: 9px;
   color: var(--text);
   font-size: calc(12.5px * var(--fs, 1));
+}
+.settings-row-actions {
+  display: flex;
+  gap: 8px;
 }

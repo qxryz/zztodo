@@ -32,6 +32,8 @@ export function Settings({
   tagColors,
   autoLock,
   onResetKeyColumns,
+  keyColumnLinesVisible,
+  onToggleKeyColumnLines,
   onClose,
 }: {
   theme: Theme;
@@ -41,6 +43,8 @@ export function Settings({
   tagColors: ReturnType<typeof useTagColors>;
   autoLock: ReturnType<typeof useAutoLock>;
   onResetKeyColumns: () => void;
+  keyColumnLinesVisible: boolean;
+  onToggleKeyColumnLines: () => void;
   onClose: () => void;
 }) {
   const [version, setVersion] = useState("");
@@ -135,9 +139,14 @@ export function Settings({
 
           <div className="settings-row">
             <span>Key 列表列宽</span>
-            <button className="btn" onClick={onResetKeyColumns}>
-              重置为默认
-            </button>
+            <div className="settings-row-actions">
+              <button className="btn" onClick={onToggleKeyColumnLines}>
+                {keyColumnLinesVisible ? "隐藏分隔线" : "显示分隔线"}
+              </button>
+              <button className="btn" onClick={onResetKeyColumns}>
+                重置为默认
+              </button>
+            </div>
           </div>
 
           <div className="settings-row">

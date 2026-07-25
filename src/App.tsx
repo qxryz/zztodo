@@ -134,6 +134,7 @@ export default function App() {
           onStatus={vault.setStatus}
           columnWidths={keyCols.widths}
           onColumnResize={keyCols.setWidth}
+          columnLinesVisible={keyCols.linesVisible}
         />
       ) : (
         <>
@@ -218,6 +219,8 @@ export default function App() {
           tagColors={tagColors}
           autoLock={autoLock}
           onResetKeyColumns={keyCols.reset}
+          keyColumnLinesVisible={keyCols.linesVisible}
+          onToggleKeyColumnLines={keyCols.toggleLinesVisible}
           onClose={() => setSettingsOpen(false)}
         />
       )}

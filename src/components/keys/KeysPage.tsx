@@ -13,12 +13,14 @@ export function KeysPage({
   onStatus,
   columnWidths,
   onColumnResize,
+  columnLinesVisible,
 }: {
   status: VaultStatus | null;
   projects: Project[];
   onStatus: (s: VaultStatus) => void;
   columnWidths: Record<ColKey, number>;
   onColumnResize: (key: ColKey, value: number) => void;
+  columnLinesVisible: boolean;
 }) {
   if (!status) return <div className="empty">加载中…</div>;
   if (status.state === "uninitialized") return <SetupView onCreated={onStatus} />;
@@ -30,6 +32,7 @@ export function KeysPage({
       onStatus={onStatus}
       columnWidths={columnWidths}
       onColumnResize={onColumnResize}
+      columnLinesVisible={columnLinesVisible}
     />
   );
 }

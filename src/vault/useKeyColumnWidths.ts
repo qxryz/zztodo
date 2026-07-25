@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 const KEY = "zztodo-key-col-widths";
+const LINES_VISIBLE_KEY = "zztodo-key-col-lines-visible";
 
 /**
  * The named columns of the Key list, in display order. Widths are kept in this
@@ -68,5 +69,20 @@ export function useKeyColumnWidths() {
     setWidths({ ...DEFAULT_COL_WIDTHS });
   }, []);
 
-  return { widths, setWidth, reset };
+  // Whether the full-height column-boundary guides are drawn over the list.
+  // Defaults on since that's the whole point of the feature; some users find
+  // permanent vertical lines running through their data visually noisy, so
+  // Settings offers a toggle instead of forcing them to live with it.
+  const [linesVisible, setLinesVisible] = useState<boolean>(() => {
+    const raw = localStorage.getItem(LINES_VISIBLE_KEY);
+    return raw === null ? true : raw === "1";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(LINES_VISIBLE_KEY, linesVisible ? "1" : "0");
+  }, [linesVisible]);
+
+  const toggleLinesVisible = useCallback(() => setLinesVisible((v) => !v), []);
+
+  return { widths, setWidth, reset, linesVisible, toggleLinesVisible };
 }
