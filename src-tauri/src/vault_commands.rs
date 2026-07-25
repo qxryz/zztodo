@@ -539,6 +539,34 @@ fn looks_like_anthropic(base_url: &str) -> bool {
     base_url.to_lowercase().contains("anthropic")
 }
 
+/// User-selectable protocol for `vault_fetch_models`. `auto` falls back to
+/// the URL substring heuristic in `looks_like_anthropic`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FetchProtocol {
+    Auto,
+    OpenAi,
+    Anthropic,
+}
+
+impl FetchProtocol {
+    fn parse(raw: Option<&str>) -> Self {
+        match raw.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("openai") => Self::OpenAi,
+            Some("anthropic") => Self::Anthropic,
+            // None / "" / "auto" / anything unrecognised: defer to the URL hint.
+            _ => Self::Auto,
+        }
+    }
+
+    fn from_url(base_url: &str) -> Self {
+        if looks_like_anthropic(base_url) {
+            Self::Anthropic
+        } else {
+            Self::OpenAi
+        }
+    }
+}
+
 fn join_models_url(base_url: &str) -> Result<String, String> {
     let trimmed = base_url.trim();
     if trimmed.is_empty() {
@@ -563,18 +591,25 @@ fn join_models_url(base_url: &str) -> Result<String, String> {
 ///
 /// Supports OpenAI-compatible providers (Authorization: Bearer <key>, response
 /// `{"data":[{"id":...}]}`) and Anthropic (x-api-key + anthropic-version,
-/// response `{"data":[{"id":...}]}`). The protocol is chosen by inspecting the
-/// base URL.
+/// response `{"data":[{"id":...}]}`). The protocol can be chosen explicitly
+/// via the `protocol` argument (`"openai"` or `"anthropic"`); otherwise it
+/// falls back to inspecting the base URL for the substring "anthropic".
 #[tauri::command]
 pub async fn vault_fetch_models(
     base_url: String,
     api_key: String,
+    protocol: Option<String>,
 ) -> Result<Vec<String>, String> {
     let url = join_models_url(&base_url)?;
     let key = api_key.trim().to_string();
     if key.is_empty() {
         return Err("请先填写 key 再拉取模型".into());
     }
+
+    let picked = match FetchProtocol::parse(protocol.as_deref()) {
+        FetchProtocol::Auto => FetchProtocol::from_url(&base_url),
+        explicit => explicit,
+    };
 
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -583,15 +618,18 @@ pub async fn vault_fetch_models(
         .build()
         .map_err(|e| format!("构造 HTTP 客户端失败：{e}"))?;
 
-    let mut req = client.get(&url);
-    if looks_like_anthropic(&base_url) {
-        req = req
-            .header("x-api-key", &key)
-            .header("anthropic-version", "2023-06-01");
-    } else {
-        req = req.bearer_auth(&key);
+    let mut req = client.get(&url).header("Accept", "application/json");
+    match picked {
+        FetchProtocol::Anthropic => {
+            req = req
+                .header("x-api-key", &key)
+                .header("anthropic-version", "2023-06-01");
+        }
+        FetchProtocol::OpenAi => {
+            req = req.bearer_auth(&key);
+        }
+        FetchProtocol::Auto => unreachable!("Auto is resolved before matching"),
     }
-    req = req.header("Accept", "application/json");
 
     let resp = req.send().await.map_err(|e| format!("网络错误：{url}：{e}"))?;
     let status = resp.status();
@@ -1050,5 +1088,40 @@ mod tests {
         assert!(looks_like_anthropic("https://ANTHROPIC.example.com"));
         assert!(looks_like_anthropic("https://relay.example.com/anthropic-proxy"));
         assert!(!looks_like_anthropic("https://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn fetch_protocol_parse_normalises_input() {
+        assert_eq!(FetchProtocol::parse(None), FetchProtocol::Auto);
+        assert_eq!(FetchProtocol::parse(Some("")), FetchProtocol::Auto);
+        assert_eq!(FetchProtocol::parse(Some("auto")), FetchProtocol::Auto);
+        assert_eq!(FetchProtocol::parse(Some("  auto  ")), FetchProtocol::Auto);
+        assert_eq!(FetchProtocol::parse(Some("openai")), FetchProtocol::OpenAi);
+        assert_eq!(FetchProtocol::parse(Some("OPENAI")), FetchProtocol::OpenAi);
+        assert_eq!(
+            FetchProtocol::parse(Some("anthropic")),
+            FetchProtocol::Anthropic
+        );
+        // Garbage in falls back to Auto rather than panicking.
+        assert_eq!(FetchProtocol::parse(Some("bogus")), FetchProtocol::Auto);
+    }
+
+    #[test]
+    fn fetch_protocol_from_url_defaults_anthropic_substring() {
+        assert_eq!(
+            FetchProtocol::from_url("https://api.anthropic.com/v1"),
+            FetchProtocol::Anthropic,
+        );
+        assert_eq!(
+            FetchProtocol::from_url("https://api.openai.com/v1"),
+            FetchProtocol::OpenAi,
+        );
+        // A gateway exposing Anthropic-compatible format but without the
+        // "anthropic" substring must NOT be silently routed to OpenAI; the
+        // frontend's explicit picker is the only way to opt in.
+        assert_eq!(
+            FetchProtocol::from_url("https://relay.example.com/gateway/v1"),
+            FetchProtocol::OpenAi,
+        );
     }
 }

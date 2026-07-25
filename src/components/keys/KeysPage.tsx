@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Project } from "../../types";
 import { vaultApi } from "../../vault/api";
 import { MASTER_PASSWORD_WARNING, formatBytes, type VaultStatus } from "../../vault/types";
+import type { ColKey } from "../../vault/useKeyColumnWidths";
 import { KeyList } from "./KeyList";
 
 const DESTROY_PHRASE = "注销库";
@@ -10,15 +11,27 @@ export function KeysPage({
   status,
   projects,
   onStatus,
+  columnWidths,
+  onColumnResize,
 }: {
   status: VaultStatus | null;
   projects: Project[];
   onStatus: (s: VaultStatus) => void;
+  columnWidths: Record<ColKey, number>;
+  onColumnResize: (key: ColKey, value: number) => void;
 }) {
   if (!status) return <div className="empty">加载中…</div>;
   if (status.state === "uninitialized") return <SetupView onCreated={onStatus} />;
   if (status.state === "locked") return <LockView status={status} onUnlocked={onStatus} />;
-  return <KeyList status={status} projects={projects} onStatus={onStatus} />;
+  return (
+    <KeyList
+      status={status}
+      projects={projects}
+      onStatus={onStatus}
+      columnWidths={columnWidths}
+      onColumnResize={onColumnResize}
+    />
+  );
 }
 
 function SetupView({ onCreated }: { onCreated: (s: VaultStatus) => void }) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Project } from "../../types";
-import { vaultApi } from "../../vault/api";
+import { vaultApi, type FetchProtocol } from "../../vault/api";
 import { copySecret, copyText, SECRET_TTL_SECONDS } from "../../vault/clipboard";
 import {
   emptyEntryInput,
@@ -62,6 +62,7 @@ export function KeyEditor({
   const [busy, setBusy] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<string[] | null>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchProtocol, setFetchProtocol] = useState<FetchProtocol>("auto");
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof EntryInput>(k: K, v: EntryInput[K]) =>
@@ -204,7 +205,11 @@ export function KeyEditor({
     setFetchingModels(true);
     setFetchedModels(null);
     try {
-      const models = await vaultApi.fetchModels(form.base_url.trim(), key);
+      const models = await vaultApi.fetchModels(
+        form.base_url.trim(),
+        key,
+        fetchProtocol,
+      );
       setFetchedModels(models);
       if (models.length === 0) onNotify("未取到任何模型 id");
       else onNotify(`已拉取 ${models.length} 个模型`);
@@ -423,6 +428,27 @@ export function KeyEditor({
               模型 id（可选，最多 1 个。点「拉取模型」按 baseurl + key 取候选）
               {modelIdCount > 0 && <span className="field-hint">{modelIdCount}/1</span>}
             </span>
+            <div className="model-protocol">
+              <span className="prov-hint">协议</span>
+              <div className="segmented">
+                {(
+                  [
+                    ["auto", "自动"],
+                    ["openai", "OpenAI 兼容"],
+                    ["anthropic", "Anthropic 兼容"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={`segmented-opt ${fetchProtocol === v ? "active" : ""}`}
+                    onClick={() => setFetchProtocol(v)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="model-id-row">
               <input
                 value={form.model_id}

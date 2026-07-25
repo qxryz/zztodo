@@ -1014,7 +1014,16 @@ input[type="range"] {
 }
 .key-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr) minmax(0, 0.9fr) 132px minmax(0, 1fr) 84px 78px;
+  /* Each column reads from a `--col-<key>` CSS variable so user-driven
+     resize updates flow into every row without per-row state. */
+  grid-template-columns:
+    var(--col-entry, minmax(160px, 1.6fr))
+    var(--col-projects, minmax(60px, 0.9fr))
+    var(--col-tags, minmax(60px, 0.9fr))
+    var(--col-env, 132px)
+    var(--col-model, minmax(120px, 1fr))
+    var(--col-actions, 84px)
+    var(--col-updated, 78px);
   align-items: center;
   gap: 12px;
   background: var(--bg-card);
@@ -1025,6 +1034,56 @@ input[type="range"] {
   cursor: default;
   user-select: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* ---------- column resize strip ---------- */
+.key-col-strip {
+  display: grid;
+  grid-template-columns:
+    var(--col-entry, minmax(160px, 1.6fr))
+    var(--col-projects, minmax(60px, 0.9fr))
+    var(--col-tags, minmax(60px, 0.9fr))
+    var(--col-env, 132px)
+    var(--col-model, minmax(120px, 1fr))
+    var(--col-actions, 84px)
+    var(--col-updated, 78px);
+  gap: 12px;
+  height: 12px;
+  margin: 0 20px;
+  user-select: none;
+}
+.key-col-strip-cell {
+  position: relative;
+  height: 100%;
+  border-bottom: 1px dashed var(--border);
+}
+.key-col-handle {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  width: 12px;
+  height: 100%;
+  cursor: col-resize;
+  /* Hidden by default; widened on hover for discoverability. */
+}
+.key-col-handle::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-0.5px);
+  background: transparent;
+  transition: background 0.12s;
+}
+.key-col-strip:hover .key-col-handle::after,
+.key-col-handle:hover::after {
+  background: var(--border-strong);
+}
+.key-col-handle:hover::after {
+  width: 2px;
+  transform: translateX(-1px);
 }
 .key-row:hover {
   border-color: var(--border-strong);
@@ -1265,6 +1324,12 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.model-protocol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 .model-id-row input {
   flex: 1;

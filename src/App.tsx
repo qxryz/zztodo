@@ -16,6 +16,7 @@ import { KeysPage } from "./components/keys/KeysPage";
 import { useVault } from "./vault/useVault";
 import { useIdleLock } from "./vault/useIdleLock";
 import { useAutoLock } from "./vault/useAutoLock";
+import { useKeyColumnWidths } from "./vault/useKeyColumnWidths";
 
 type Filter = "all" | Status | "pinned" | "favorite";
 
@@ -33,6 +34,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const vault = useVault();
   const autoLock = useAutoLock();
+  const keyCols = useKeyColumnWidths();
   const keysMode = mode === "keys";
 
   // Auto-lock runs app-wide: switching to the projects page keeps the vault
@@ -126,7 +128,13 @@ export default function App() {
       </header>
 
       {keysMode ? (
-        <KeysPage status={vault.status} projects={projects} onStatus={vault.setStatus} />
+        <KeysPage
+          status={vault.status}
+          projects={projects}
+          onStatus={vault.setStatus}
+          columnWidths={keyCols.widths}
+          onColumnResize={keyCols.setWidth}
+        />
       ) : (
         <>
           <nav className="filters">
@@ -209,6 +217,7 @@ export default function App() {
           onFontScaleChange={setFontScale}
           tagColors={tagColors}
           autoLock={autoLock}
+          onResetKeyColumns={keyCols.reset}
           onClose={() => setSettingsOpen(false)}
         />
       )}

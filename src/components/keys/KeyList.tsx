@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Project } from "../../types";
 import { vaultApi } from "../../vault/api";
 import { copySecret, copyText, SECRET_TTL_SECONDS } from "../../vault/clipboard";
 import { formatBytes, type EntryMeta, type VaultStatus } from "../../vault/types";
+import { COL_KEYS, type ColKey } from "../../vault/useKeyColumnWidths";
 import { KeyRow } from "./KeyRow";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyEditor } from "./KeyEditor";
@@ -19,10 +21,14 @@ export function KeyList({
   status,
   projects,
   onStatus,
+  columnWidths,
+  onColumnResize,
 }: {
   status: VaultStatus;
   projects: Project[];
   onStatus: (s: VaultStatus) => void;
+  columnWidths: Record<ColKey, number>;
+  onColumnResize: (key: ColKey, value: number) => void;
 }) {
   const [entries, setEntries] = useState<EntryMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,6 +250,13 @@ export function KeyList({
         ))}
       </nav>
 
+      {entries.length > 0 && (
+        <ColumnResizeStrip
+          widths={columnWidths}
+          onResize={onColumnResize}
+        />
+      )}
+
       <main className="list key-list">
         {loading ? (
           <div className="empty">加载中…</div>
@@ -269,6 +282,7 @@ export function KeyList({
               entry={e}
               projects={projects}
               selected={selected === e.id}
+              columnStyle={cssVars(columnWidths)}
               onSelect={() => setSelected(e.id)}
               onOpen={() => setEditing(e)}
               onContextMenu={(ev) => {
@@ -323,5 +337,73 @@ export function KeyList({
 
       {toast && <div className="key-toast">{toast}</div>}
     </>
+  );
+}
+
+/**
+ * Translate column widths into CSS variables that `KeyRow` consumes. Each
+ * column declares its own `--col-<key>` variable so a single drag can target
+ * exactly one width while leaving siblings at their own widths.
+ */
+function cssVars(widths: Record<ColKey, number>): CSSProperties {
+  // CSSProperties doesn't index custom properties; cast to the loose shape
+  // we know the row's CSS reads.
+  const out = {} as CSSProperties & Record<`--col-${ColKey}`, string>;
+  for (const k of COL_KEYS) out[`--col-${k}`] = `${widths[k]}px`;
+  return out;
+}
+
+/**
+ * Thin strip that sits above the rows and exposes one drag handle per
+ * column boundary. Drag updates the relevant column width via
+ * `onResize`. Only the first boundary is draggable per cell so handles
+ * don't overlap.
+ */
+function ColumnResizeStrip({
+  widths,
+  onResize,
+}: {
+  widths: Record<ColKey, number>;
+  onResize: (key: ColKey, value: number) => void;
+}) {
+  const startDrag = (
+    e: ReactMouseEvent<HTMLDivElement>,
+    key: ColKey,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = widths[key];
+    const move = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      onResize(key, startW + delta);
+    };
+    const up = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  };
+
+  return (
+    <div className="key-col-strip" style={cssVars(widths)} aria-hidden="true">
+      {COL_KEYS.map((k) => (
+        <div key={k} className={`key-col-strip-cell key-col-strip-cell--${k}`}>
+          {COL_KEYS.indexOf(k) < COL_KEYS.length - 1 && (
+            <div
+              className="key-col-handle"
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={(e) => startDrag(e, k)}
+            />
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

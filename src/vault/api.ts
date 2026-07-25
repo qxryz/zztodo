@@ -8,6 +8,9 @@ import type {
   VaultStatus,
 } from "./types";
 
+/** Protocol hint for `vault_fetch_models`. Mirrors the Rust enum. */
+export type FetchProtocol = "auto" | "openai" | "anthropic";
+
 export const vaultApi = {
   status: () => invoke<VaultStatus>("vault_status"),
   create: (password: string) => invoke<VaultStatus>("vault_create", { password }),
@@ -34,6 +37,6 @@ export const vaultApi = {
     invoke<ProviderTemplate[]>("vault_save_provider", { input }),
   deleteProvider: (id: number) => invoke<ProviderTemplate[]>("vault_delete_provider", { id }),
 
-  fetchModels: (baseUrl: string, apiKey: string) =>
-    invoke<string[]>("vault_fetch_models", { baseUrl, apiKey }),
+  fetchModels: (baseUrl: string, apiKey: string, protocol: FetchProtocol = "auto") =>
+    invoke<string[]>("vault_fetch_models", { baseUrl, apiKey, protocol }),
 };

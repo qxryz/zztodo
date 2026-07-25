@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Project } from "../../types";
 import type { EntryMeta } from "../../vault/types";
@@ -9,6 +10,7 @@ export function KeyRow({
   onSelect,
   onOpen,
   onContextMenu,
+  columnStyle,
 }: {
   entry: EntryMeta;
   projects: Project[];
@@ -16,6 +18,8 @@ export function KeyRow({
   onSelect: () => void;
   onOpen: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  /** Inline `--col-*` CSS variables that override the row's grid template. */
+  columnStyle?: CSSProperties;
 }) {
   // Projects deleted from the projects page are simply ignored here.
   const linked = entry.project_ids
@@ -30,6 +34,7 @@ export function KeyRow({
   return (
     <div
       className={`key-row ${selected ? "selected" : ""}`}
+      style={columnStyle}
       onClick={onSelect}
       onDoubleClick={onOpen}
       onContextMenu={onContextMenu}

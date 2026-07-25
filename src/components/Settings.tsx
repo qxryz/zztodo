@@ -31,6 +31,7 @@ export function Settings({
   onFontScaleChange,
   tagColors,
   autoLock,
+  onResetKeyColumns,
   onClose,
 }: {
   theme: Theme;
@@ -39,6 +40,7 @@ export function Settings({
   onFontScaleChange: (f: FontScale) => void;
   tagColors: ReturnType<typeof useTagColors>;
   autoLock: ReturnType<typeof useAutoLock>;
+  onResetKeyColumns: () => void;
   onClose: () => void;
 }) {
   const [version, setVersion] = useState("");
@@ -129,6 +131,13 @@ export function Settings({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="settings-row">
+            <span>Key 列表列宽</span>
+            <button className="btn" onClick={onResetKeyColumns}>
+              重置为默认
+            </button>
           </div>
 
           <div className="settings-row">
