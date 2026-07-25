@@ -7,6 +7,7 @@ import { copySecret, copyText, SECRET_TTL_SECONDS } from "../../vault/clipboard"
 import { formatBytes, type EntryMeta, type VaultStatus } from "../../vault/types";
 import { KeyRow } from "./KeyRow";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { KeyEditor } from "./KeyEditor";
 
 interface MenuAnchor {
   x: number;
@@ -31,6 +32,7 @@ export function KeyList({
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [menu, setMenu] = useState<MenuAnchor | null>(null);
+  const [editing, setEditing] = useState<EntryMeta | "new" | null>(null);
   const [toast, setToast] = useState("");
 
   const flash = (msg: string) => {
@@ -130,7 +132,7 @@ export function KeyList({
   };
 
   const menuItems = (entry: EntryMeta): MenuItem[] => [
-    { label: "编辑", onClick: () => setSelected(entry.id) },
+    { label: "编辑", onClick: () => setEditing(entry) },
     {
       label: "复制密码",
       separatorBefore: true,
@@ -194,6 +196,9 @@ export function KeyList({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <button className="btn primary" onClick={() => setEditing("new")}>
+          + 新建 Key
+        </button>
       </div>
 
       <nav className="filters key-filters">
@@ -243,6 +248,9 @@ export function KeyList({
         ) : entries.length === 0 ? (
           <div className="empty">
             <p>还没有 Key</p>
+            <button className="btn primary" onClick={() => setEditing("new")}>
+              创建第一个 Key
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty">
@@ -256,7 +264,7 @@ export function KeyList({
               projects={projects}
               selected={selected === e.id}
               onSelect={() => setSelected(e.id)}
-              onOpen={() => setSelected(e.id)}
+              onOpen={() => setEditing(e)}
               onContextMenu={(ev) => {
                 ev.preventDefault();
                 setSelected(e.id);
@@ -283,6 +291,27 @@ export function KeyList({
           y={menu.y}
           items={menuItems(menu.entry)}
           onClose={() => setMenu(null)}
+        />
+      )}
+
+      {editing && (
+        <KeyEditor
+          entry={editing === "new" ? null : editing}
+          projects={projects}
+          onClose={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
+            await refresh();
+            flash("已保存");
+          }}
+          onDeleted={async () => {
+            setEditing(null);
+            setSelected(null);
+            await refresh();
+            flash("已删除");
+          }}
+          onNotify={flash}
+          onVaultChanged={refresh}
         />
       )}
 

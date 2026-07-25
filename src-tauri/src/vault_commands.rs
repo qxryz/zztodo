@@ -642,4 +642,92 @@ mod tests {
         assert!(json.contains("f.pdf"), "attachment name should still be listed");
         assert_eq!(meta.attachments[0].size, 3);
     }
+
+    #[test]
+    fn every_field_survives_a_save_encrypt_reload_cycle() {
+        let mut v = VaultData::empty();
+        let full = EntryInput {
+            id: None,
+            title: "OpenAI 主力".into(),
+            project_ids: vec![3, 7],
+            base_url: "https://api.openai.com/v1".into(),
+            docs_url: "https://platform.openai.com/docs".into(),
+            console_url: "https://platform.openai.com/api-keys".into(),
+            purpose: "生产环境".into(),
+            used_in: "zztodo, blog".into(),
+            tags: vec!["生产".into(), "付费".into()],
+            username: "me@example.com".into(),
+            env_var: "OPENAI_API_KEY".into(),
+            notes: "每月 200 刀额度".into(),
+            secret: Some("sk-live-abc123".into()),
+        };
+        v.upsert_entry(full, "2026-07-25T00:00:00Z".into()).unwrap();
+
+        let bytes = encrypt_vault(&v, "master-pw").unwrap();
+        let back = decrypt_vault(&bytes, "master-pw").unwrap();
+        let e = &back.entries[0];
+
+        assert_eq!(e.title, "OpenAI 主力");
+        assert_eq!(e.project_ids, vec![3, 7]);
+        assert_eq!(e.base_url, "https://api.openai.com/v1");
+        assert_eq!(e.docs_url, "https://platform.openai.com/docs");
+        assert_eq!(e.console_url, "https://platform.openai.com/api-keys");
+        assert_eq!(e.purpose, "生产环境");
+        assert_eq!(e.used_in, "zztodo, blog");
+        assert_eq!(e.tags, vec!["生产".to_string(), "付费".to_string()]);
+        assert_eq!(e.username, "me@example.com");
+        assert_eq!(e.env_var, "OPENAI_API_KEY");
+        assert_eq!(e.notes, "每月 200 刀额度");
+        assert_eq!(e.secret, "sk-live-abc123");
+        assert_eq!(e.created_at, "2026-07-25T00:00:00Z");
+    }
+
+    #[test]
+    fn providers_and_entries_share_the_id_counter_without_collision() {
+        let mut v = VaultData::empty();
+        let entry_id = v
+            .upsert_entry(input(None, "k", Some("s")), "t0".into())
+            .unwrap()
+            .id;
+
+        // Providers draw from the same next_id, so ids must not repeat.
+        let provider_id = v.next_id;
+        v.next_id += 1;
+        v.providers.push(ProviderTemplate {
+            id: provider_id,
+            name: "我的中转".into(),
+            base_url: "https://relay.example.com/v1".into(),
+            docs_url: String::new(),
+            console_url: String::new(),
+        });
+
+        let next_entry_id = v
+            .upsert_entry(input(None, "k2", Some("s2")), "t0".into())
+            .unwrap()
+            .id;
+
+        assert_ne!(entry_id, provider_id);
+        assert_ne!(next_entry_id, provider_id);
+        assert_eq!((entry_id, provider_id, next_entry_id), (1, 2, 3));
+    }
+
+    #[test]
+    fn attachment_with_the_same_name_is_replaced_not_duplicated() {
+        // Mirrors vault_add_attachment's retain-then-push behaviour.
+        let mut v = VaultData::empty();
+        v.upsert_entry(input(None, "a", Some("s")), "t0".into()).unwrap();
+        let atts = &mut v.entries[0].attachments;
+
+        for data in ["Zmlyc3Q=", "c2Vjb25k"] {
+            atts.retain(|a| a.name != "same.pdf");
+            atts.push(Attachment {
+                name: "same.pdf".into(),
+                size: 5,
+                data: data.into(),
+            });
+        }
+
+        assert_eq!(atts.len(), 1, "same-named attachment must not duplicate");
+        assert_eq!(atts[0].data, "c2Vjb25k", "later import wins");
+    }
 }
