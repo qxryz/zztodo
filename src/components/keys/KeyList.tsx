@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Project } from "../../types";
@@ -295,8 +296,6 @@ export function KeyList({
         />
       </nav>
 
-      {entries.length > 0 && <ColumnHeader widths={columnWidths} />}
-
       <div className="key-table-body">
         <main className="list key-list">
           {loading ? (
@@ -389,46 +388,44 @@ export function KeyList({
 /**
  * Translate column widths into CSS variables that `KeyRow` consumes. Each
  * column declares its own `--col-<key>` variable so a single drag can target
- * exactly one width while leaving siblings at their own widths.
- *
- * The entry column is the one exception: it always gets `minmax(width, 1fr)`
- * rather than a literal width, so it absorbs whatever space the other
- * (fixed-width, content-sized) columns don't need instead of leaving the row
- * short of the container's full width on a wide window.
+ * exactly one width while leaving siblings at their own widths. All 7 are
+ * literal pixel values — the row's grid has an 8th, unlabeled trailing
+ * `1fr` track (see `.key-row` in styles.css) that absorbs leftover width on
+ * a wide window, so no single named column needs to stretch. Keeping every
+ * named column's *rendered* width equal to its *stored* width (rather than
+ * letting one of them resolve via `minmax(..., 1fr)`) is what makes
+ * `boundaryPositions` below exact — a stretched column's true on-screen
+ * width wouldn't match its stored number, so a boundary line derived from
+ * the stored numbers would drift from the real column edges the further
+ * right it is from the stretched column.
  */
 function cssVars(widths: Record<ColKey, number>): CSSProperties {
   // CSSProperties doesn't index custom properties; cast to the loose shape
   // we know the row's CSS reads.
   const out = {} as CSSProperties & Record<`--col-${ColKey}`, string>;
-  for (const k of COL_KEYS) {
-    out[`--col-${k}`] = k === "entry" ? `minmax(${widths[k]}px, 1fr)` : `${widths[k]}px`;
-  }
+  for (const k of COL_KEYS) out[`--col-${k}`] = `${widths[k]}px`;
   return out;
 }
 
-const COL_LABELS: Record<ColKey, string> = {
-  entry: "标题",
-  projects: "项目",
-  tags: "标签",
-  env: "环境变量",
-  model: "模型",
-  actions: "操作",
-  updated: "更新时间",
-};
+/** Mirrors `.key-row`'s own box model in styles.css: list padding (20px) +
+ * row border-left (4px) + row padding-left (14px), and the row's grid gap.
+ * Kept as plain constants (not measured from the DOM) so boundary math is
+ * exact and doesn't depend on a layout pass having already happened. */
+const ROW_LEFT_INSET = 38;
+const ROW_GAP = 12;
 
-/** Text-only header row above the list — one label per column. Resizing lives
- * in `ColumnLinesOverlay`, not here, so this row stays as short as the text
- * needs. */
-function ColumnHeader({ widths }: { widths: Record<ColKey, number> }) {
-  return (
-    <div className="key-col-header" style={cssVars(widths)}>
-      {COL_KEYS.map((k) => (
-        <div key={k} className={`key-col-header-cell key-col-header-cell--${k}`}>
-          <span className="key-col-label">{COL_LABELS[k]}</span>
-        </div>
-      ))}
-    </div>
-  );
+/** Left-edge pixel offset of each of the 6 boundaries between the 7 named
+ * columns — nothing after the last one, since there's no column to its
+ * right to resize against. */
+function boundaryPositions(widths: Record<ColKey, number>): number[] {
+  const positions: number[] = [];
+  let x = ROW_LEFT_INSET;
+  for (let i = 0; i < COL_KEYS.length - 1; i++) {
+    x += widths[COL_KEYS[i]];
+    positions.push(x);
+    x += ROW_GAP;
+  }
+  return positions;
 }
 
 /**
@@ -436,9 +433,12 @@ function ColumnHeader({ widths }: { widths: Record<ColKey, number> }) {
  * just a header strip), so the boundary — and the ability to drag it — stays
  * reachable no matter how far the list has scrolled. Lives as a sibling of
  * `<main>` inside a `position: relative` wrapper, outside the scrolling
- * element, so it doesn't scroll away with the rows. Only the thin line itself
- * re-enables pointer events; the rest of the overlay is click-through so row
- * selection, double-click-to-edit, and right-click still work underneath it.
+ * element, so it doesn't scroll away with the rows. Positions are computed
+ * directly in JS from `widths` (see `boundaryPositions`) rather than via a
+ * parallel CSS grid, so a line is never at the mercy of the browser
+ * resolving some *other* column's layout differently than expected — only
+ * the thin line itself re-enables pointer events, so row selection,
+ * double-click-to-edit, and right-click still work underneath it.
  * Double-clicking a line resets just that column back to its default width.
  */
 function ColumnLinesOverlay({
@@ -468,24 +468,24 @@ function ColumnLinesOverlay({
     document.addEventListener("mouseup", up);
   };
 
+  const positions = boundaryPositions(widths);
+
   return (
-    <div className="key-col-lines" style={cssVars(widths)} aria-hidden="true">
-      {COL_KEYS.map((k, i) => (
-        <div key={k} className={`key-col-lines-cell key-col-lines-cell--${k}`}>
-          {i < COL_KEYS.length - 1 && (
-            <div
-              className="key-col-line"
-              role="separator"
-              aria-orientation="vertical"
-              title="拖动调整列宽，双击恢复默认"
-              onMouseDown={(e) => startDrag(e, k)}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                onResize(k, DEFAULT_COL_WIDTHS[k]);
-              }}
-            />
-          )}
-        </div>
+    <div className="key-col-lines" aria-hidden="true">
+      {COL_KEYS.slice(0, -1).map((k, i) => (
+        <div
+          key={k}
+          className="key-col-line"
+          role="separator"
+          aria-orientation="vertical"
+          title="拖动调整列宽，双击恢复默认"
+          style={{ left: positions[i] - 10 }}
+          onMouseDown={(e) => startDrag(e, k)}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            onResize(k, DEFAULT_COL_WIDTHS[k]);
+          }}
+        />
       ))}
     </div>
   );
@@ -493,9 +493,13 @@ function ColumnLinesOverlay({
 
 /**
  * A "全部" + labeled option list behind a single trigger button, used for the
- * project / custom-tag / payment-method filters. Each instance owns its own
- * open state and closes on an outside click, mirroring the picker in
- * `KeyEditor`.
+ * project / custom-tag / payment-method filters. The menu is portaled to
+ * `document.body` and positioned with `position: fixed` from the trigger's
+ * own bounding rect — the filter bar (`.filters`) has `overflow-x: auto` for
+ * its horizontal chip scroll, and per the CSS spec that forces the *other*
+ * axis to clip too, so a menu simply nested inside it gets cut off instead
+ * of hanging below the bar. Escaping via a portal sidesteps that entirely,
+ * the same way `ContextMenu` already renders outside any scrolling ancestor.
  */
 function FilterDropdown<T extends string | number>({
   label,
@@ -509,12 +513,22 @@ function FilterDropdown<T extends string | number>({
   onChange: (v: T | "all") => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const openMenu = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) setMenuPos({ top: rect.bottom + 6, left: rect.left });
+    setOpen(true);
+  };
 
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
@@ -526,46 +540,54 @@ function FilterDropdown<T extends string | number>({
   if (options.length === 0) return null;
 
   return (
-    <div className="filter-dropdown" ref={ref}>
+    <div className="filter-dropdown">
       <button
+        ref={triggerRef}
         type="button"
         className={`chip filter-dropdown-trigger ${selected ? "active" : ""}`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
       >
         {selected ? selected.label : label}
         <span className="chip-count">{selected ? selected.count : total}</span>
         <span className="filter-caret">{open ? "▴" : "▾"}</span>
       </button>
-      {open && (
-        <div className="filter-dropdown-menu">
-          <button
-            type="button"
-            className={`filter-dropdown-item ${value === "all" ? "active" : ""}`}
-            onClick={() => {
-              onChange("all");
-              setOpen(false);
-            }}
+      {open &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="filter-dropdown-menu"
+            style={{ top: menuPos.top, left: menuPos.left }}
           >
-            全部
-            <span className="chip-count">{total}</span>
-          </button>
-          <div className="ctx-sep" />
-          {options.map((o) => (
             <button
-              key={o.value}
               type="button"
-              className={`filter-dropdown-item ${value === o.value ? "active" : ""}`}
+              className={`filter-dropdown-item ${value === "all" ? "active" : ""}`}
               onClick={() => {
-                onChange(o.value);
+                onChange("all");
                 setOpen(false);
               }}
             >
-              {o.label}
-              <span className="chip-count">{o.count}</span>
+              全部
+              <span className="chip-count">{total}</span>
             </button>
-          ))}
-        </div>
-      )}
+            <div className="ctx-sep" />
+            {options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`filter-dropdown-item ${value === o.value ? "active" : ""}`}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+              >
+                {o.label}
+                <span className="chip-count">{o.count}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

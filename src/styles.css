@@ -1024,10 +1024,12 @@ input[type="range"] {
   color: var(--text-dim);
 }
 .filter-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 50;
+  /* Portaled to document.body and positioned from the trigger's own
+     getBoundingClientRect(), so top/left arrive as inline px via style —
+     this is intentionally `fixed`, not `absolute`, since it now has no
+     positioned ancestor of its own to be relative to. */
+  position: fixed;
+  z-index: 60;
   min-width: 200px;
   max-height: 320px;
   overflow-y: auto;
@@ -1065,16 +1067,21 @@ input[type="range"] {
 }
 .key-row {
   display: grid;
-  /* Each column reads from a `--col-<key>` CSS variable so user-driven
-     resize updates flow into every row without per-row state. */
+  /* Each named column reads from a `--col-<key>` CSS variable so user-driven
+     resize updates flow into every row without per-row state. All 7 are
+     literal pixel values (see cssVars() in KeyList.tsx) — the trailing 8th
+     track is an unlabeled `1fr` spacer that absorbs leftover width on a wide
+     window, so no named column needs to stretch and drift from the pixel
+     math the column-boundary lines rely on. */
   grid-template-columns:
-    var(--col-entry, minmax(160px, 1.6fr))
-    var(--col-projects, minmax(60px, 0.9fr))
-    var(--col-tags, minmax(60px, 0.9fr))
+    var(--col-entry, 220px)
+    var(--col-projects, 120px)
+    var(--col-tags, 110px)
     var(--col-env, 132px)
-    var(--col-model, minmax(120px, 1fr))
+    var(--col-model, 130px)
     var(--col-actions, 84px)
-    var(--col-updated, 78px);
+    var(--col-updated, 78px)
+    minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   background: var(--bg-card);
@@ -1087,48 +1094,7 @@ input[type="range"] {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* ---------- column header (text labels only) ---------- */
-.key-col-header {
-  display: grid;
-  grid-template-columns:
-    var(--col-entry, minmax(160px, 1.6fr))
-    var(--col-projects, minmax(60px, 0.9fr))
-    var(--col-tags, minmax(60px, 0.9fr))
-    var(--col-env, 132px)
-    var(--col-model, minmax(120px, 1fr))
-    var(--col-actions, 84px)
-    var(--col-updated, 78px);
-  gap: 12px;
-  align-items: center;
-  height: 22px;
-  /* Matches the key-row's own inset (border-left 4px + padding 14px = 18px on
-     the left; border-right 1px + padding 14px = 15px on the right) added on
-     top of the list container's 20px padding, so header cells line up with
-     the actual column boundaries in the rows below instead of drifting ~15px
-     off from them. */
-  margin: 0 35px 0 38px;
-  padding-bottom: 3px;
-  border-bottom: 1px solid var(--border);
-  user-select: none;
-}
-.key-col-header-cell {
-  min-width: 0;
-}
-.key-col-header-cell--actions,
-.key-col-header-cell--updated {
-  text-align: right;
-}
-.key-col-label {
-  font-size: calc(11px * var(--fs, 1));
-  font-weight: 650;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: 0.02em;
-}
-
-/* ---------- column-boundary guides (full list height, not just header) ---------- */
+/* ---------- column-boundary guides (full list height, JS-positioned) ---------- */
 .key-table-body {
   position: relative;
   flex: 1;
@@ -1139,31 +1105,13 @@ input[type="range"] {
 .key-col-lines {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns:
-    var(--col-entry, minmax(160px, 1.6fr))
-    var(--col-projects, minmax(60px, 0.9fr))
-    var(--col-tags, minmax(60px, 0.9fr))
-    var(--col-env, 132px)
-    var(--col-model, minmax(120px, 1fr))
-    var(--col-actions, 84px)
-    var(--col-updated, 78px);
-  gap: 12px;
-  /* Same insets as the header above, so the lines land exactly on the
-     boundaries between the row cells they're meant to resize. */
-  margin: 0 35px 0 38px;
   pointer-events: none;
   z-index: 5;
-}
-.key-col-lines-cell {
-  position: relative;
-  height: 100%;
 }
 .key-col-line {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: -10px;
   width: 20px;
   cursor: col-resize;
   pointer-events: auto;
