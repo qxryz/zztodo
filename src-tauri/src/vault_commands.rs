@@ -50,6 +50,19 @@ fn persist(path: &PathBuf, unlocked: &Unlocked) -> Result<(), String> {
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// Delete the vault file and any tmp left behind by an interrupted save.
+/// Idempotent: a missing file is not an error.
+fn remove_vault_files(path: &PathBuf) -> Result<(), String> {
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("vault.tmp");
+    if tmp.exists() {
+        std::fs::remove_file(&tmp).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[derive(Serialize)]
 pub struct VaultStatus {
     pub state: String, // uninitialized | locked | unlocked
@@ -264,6 +277,24 @@ pub fn vault_unlock(state: State<VaultState>, password: String) -> Result<VaultS
 pub fn vault_lock(state: State<VaultState>) -> Result<(), String> {
     *state.inner.lock().map_err(|e| e.to_string())? = None;
     Ok(())
+}
+
+/// Delete the vault outright, returning to the uninitialized state.
+///
+/// This is the documented escape hatch for a forgotten master password: the
+/// ciphertext is unrecoverable without it, so there is nothing worth keeping.
+/// No password is required — the caller by definition does not have it. The
+/// confirmation lives in the UI.
+#[tauri::command]
+pub fn vault_destroy(state: State<VaultState>) -> Result<VaultStatus, String> {
+    {
+        // Drop any unlocked copy first so the in-memory password is zeroized
+        // even if the file removal below fails.
+        let mut guard = state.inner.lock().map_err(|e| e.to_string())?;
+        *guard = None;
+    }
+    remove_vault_files(&state.path)?;
+    vault_status(state)
 }
 
 #[tauri::command]
@@ -729,5 +760,33 @@ mod tests {
 
         assert_eq!(atts.len(), 1, "same-named attachment must not duplicate");
         assert_eq!(atts[0].data, "c2Vjb25k", "later import wins");
+    }
+
+    #[test]
+    fn destroy_removes_the_vault_and_any_leftover_tmp() {
+        let path = tmp_path("destroy");
+        let tmp = path.with_extension("vault.tmp");
+        persist(
+            &path,
+            &Unlocked {
+                password: "pw".into(),
+                data: VaultData::empty(),
+            },
+        )
+        .unwrap();
+        // Simulate a save that crashed between write and rename.
+        std::fs::write(&tmp, b"partial").unwrap();
+
+        remove_vault_files(&path).unwrap();
+
+        assert!(!path.exists(), "vault file must be gone");
+        assert!(!tmp.exists(), "leftover tmp must not survive a destroy");
+    }
+
+    #[test]
+    fn destroy_on_a_missing_vault_is_not_an_error() {
+        let path = tmp_path("destroy-missing");
+        assert!(!path.exists());
+        remove_vault_files(&path).expect("destroying nothing must succeed");
     }
 }

@@ -13,6 +13,7 @@ export const vaultApi = {
   create: (password: string) => invoke<VaultStatus>("vault_create", { password }),
   unlock: (password: string) => invoke<VaultStatus>("vault_unlock", { password }),
   lock: () => invoke<void>("vault_lock"),
+  destroy: () => invoke<VaultStatus>("vault_destroy"),
   changePassword: (old: string, next: string) =>
     invoke<void>("vault_change_password", { old, new: next }),
 

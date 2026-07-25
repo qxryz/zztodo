@@ -4,6 +4,8 @@ import { vaultApi } from "../../vault/api";
 import { MASTER_PASSWORD_WARNING, formatBytes, type VaultStatus } from "../../vault/types";
 import { KeyList } from "./KeyList";
 
+const DESTROY_PHRASE = "注销库";
+
 export function KeysPage({
   status,
   projects,
@@ -135,6 +137,94 @@ function LockView({
             {status.path}
           </span>
         </p>
+
+        <DestroyPanel status={status} onDestroyed={onUnlocked} />
+      </div>
+    </div>
+  );
+}
+
+// The escape hatch for a forgotten master password. Deliberately two-step and
+// gated on typing the phrase: there is no undo and no backup worth keeping,
+// since the ciphertext is useless without the password.
+function DestroyPanel({
+  status,
+  onDestroyed,
+}: {
+  status: VaultStatus;
+  onDestroyed: (s: VaultStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!open) {
+    return (
+      <button className="link-btn vault-forgot" onClick={() => setOpen(true)}>
+        忘记主密码？
+      </button>
+    );
+  }
+
+  const confirmed = typed.trim() === DESTROY_PHRASE;
+
+  const destroy = async () => {
+    if (!confirmed || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      onDestroyed(await vaultApi.destroy());
+    } catch (e) {
+      setError(String(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="vault-danger">
+      <p className="vault-danger-title">⚠️ 注销库</p>
+      <p>
+        主密码无法找回。注销将<strong>永久删除库文件</strong>，其中的全部条目、密码和附件都会丢失，
+        <strong>无法撤销、无法恢复</strong>。
+      </p>
+      <p className="vault-meta">
+        将删除：
+        <span className="vault-path" title={status.path}>
+          {status.path}
+        </span>
+        （{formatBytes(status.file_size)}）
+      </p>
+
+      <label className="field">
+        <span>
+          输入 <code>{DESTROY_PHRASE}</code> 以确认
+        </span>
+        <input
+          value={typed}
+          autoFocus
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && destroy()}
+          placeholder={DESTROY_PHRASE}
+        />
+      </label>
+
+      {error && <p className="vault-error">{error}</p>}
+
+      <div className="vault-danger-actions">
+        <button
+          className="btn"
+          onClick={() => {
+            setOpen(false);
+            setTyped("");
+            setError("");
+          }}
+        >
+          取消
+        </button>
+        <button className="btn danger" disabled={!confirmed || busy} onClick={destroy}>
+          {busy ? "注销中…" : "永久删除库"}
+        </button>
       </div>
     </div>
   );

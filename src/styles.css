@@ -956,6 +956,42 @@ input[type="range"] {
   word-break: break-all;
   opacity: 0.75;
 }
+.vault-forgot {
+  align-self: center;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: calc(12px * var(--fs, 1));
+}
+.vault-forgot:hover {
+  color: var(--danger);
+}
+.vault-danger {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px;
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid rgba(229, 72, 77, 0.32);
+  border-radius: 9px;
+  font-size: calc(12.5px * var(--fs, 1));
+  line-height: 1.6;
+}
+.vault-danger-title {
+  color: var(--danger);
+  font-weight: 650;
+}
+.vault-danger code {
+  padding: 1px 5px;
+  background: var(--bg-input);
+  border-radius: 5px;
+  font-size: calc(12px * var(--fs, 1));
+}
+.vault-danger-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 
 /* ---------- key list ---------- */
 .key-toolbar {

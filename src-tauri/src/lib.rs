@@ -72,6 +72,7 @@ pub fn run() {
             vault_commands::vault_create,
             vault_commands::vault_unlock,
             vault_commands::vault_lock,
+            vault_commands::vault_destroy,
             vault_commands::vault_change_password,
             vault_commands::vault_list_entries,
             vault_commands::vault_get_secret,
