@@ -22,7 +22,7 @@ export interface EntryMeta {
   docs_url: string;
   console_url: string;
   purpose: string;
-  used_in: string;
+  model_id: string;
   tags: string[];
   username: string;
   env_var: string;
@@ -40,7 +40,7 @@ export interface EntryInput {
   docs_url: string;
   console_url: string;
   purpose: string;
-  used_in: string;
+  model_id: string;
   tags: string[];
   username: string;
   env_var: string;
@@ -48,6 +48,15 @@ export interface EntryInput {
   /** null keeps the stored secret unchanged. */
   secret: string | null;
 }
+
+/** Fixed billing tags a key may carry. At most one of them per entry. */
+export type FixedTag = "订阅" | "按量计费";
+export const FIXED_TAGS: FixedTag[] = ["订阅", "按量计费"];
+
+/** Max number of projects a single key can bind to. */
+export const MAX_PROJECTS_PER_KEY = 2;
+/** Max number of tags a single key can carry (1 custom + 1 fixed). */
+export const MAX_TAGS_PER_KEY = 2;
 
 export interface ProviderTemplate {
   id: number;
@@ -87,7 +96,7 @@ export function emptyEntryInput(): EntryInput {
     docs_url: "",
     console_url: "",
     purpose: "",
-    used_in: "",
+    model_id: "",
     tags: [],
     username: "",
     env_var: "",
@@ -105,13 +114,39 @@ export function entryToInput(e: EntryMeta): EntryInput {
     docs_url: e.docs_url,
     console_url: e.console_url,
     purpose: e.purpose,
-    used_in: e.used_in,
+    model_id: e.model_id,
     tags: [...e.tags],
     username: e.username,
     env_var: e.env_var,
     notes: e.notes,
     secret: null,
   };
+}
+
+/**
+ * Split a stored tag array into the editable custom-tag text and the chosen
+ * fixed billing tag. Tolerant of legacy data that doesn't follow the new rule.
+ */
+export function splitTags(
+  tags: string[],
+): { custom: string; fixed: FixedTag | "" } {
+  const fixed = tags.find((t): t is FixedTag =>
+    (FIXED_TAGS as string[]).includes(t),
+  ) ?? "";
+  const custom = tags.find((t) => !(FIXED_TAGS as string[]).includes(t)) ?? "";
+  return { custom, fixed };
+}
+
+/**
+ * Build the persisted tag array from the editor state. Order is fixed:
+ * custom first, fixed last. Both are optional; empty strings are dropped.
+ */
+export function joinTags(custom: string, fixed: FixedTag | ""): string[] {
+  const out: string[] = [];
+  const c = custom.trim();
+  if (c) out.push(c);
+  if (fixed) out.push(fixed);
+  return out;
 }
 
 export function formatBytes(n: number): string {

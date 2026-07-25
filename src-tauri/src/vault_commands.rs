@@ -86,7 +86,7 @@ pub struct EntryMeta {
     pub docs_url: String,
     pub console_url: String,
     pub purpose: String,
-    pub used_in: String,
+    pub model_id: String,
     pub tags: Vec<String>,
     pub username: String,
     pub env_var: String,
@@ -105,7 +105,7 @@ fn to_meta(e: &KeyEntry) -> EntryMeta {
         docs_url: e.docs_url.clone(),
         console_url: e.console_url.clone(),
         purpose: e.purpose.clone(),
-        used_in: e.used_in.clone(),
+        model_id: e.model_id.clone(),
         tags: e.tags.clone(),
         username: e.username.clone(),
         env_var: e.env_var.clone(),
@@ -132,7 +132,7 @@ pub struct EntryInput {
     pub docs_url: String,
     pub console_url: String,
     pub purpose: String,
-    pub used_in: String,
+    pub model_id: String,
     pub tags: Vec<String>,
     pub username: String,
     pub env_var: String,
@@ -152,11 +152,54 @@ pub struct ProviderInput {
 
 const ERR_LOCKED: &str = "库未解锁";
 
+const FIXED_TAGS: &[&str] = &["订阅", "按量计费"];
+
+/// Maximum number of projects a single key can bind to.
+const MAX_PROJECTS_PER_KEY: usize = 2;
+/// Maximum number of tags a single key can carry (1 custom + 1 fixed).
+const MAX_TAGS_PER_KEY: usize = 2;
+
+fn validate_input(input: &EntryInput) -> Result<(Vec<i64>, Vec<String>), String> {
+    // Dedupe while preserving caller order so duplicates don't sneak past
+    // the length check below.
+    let mut seen_p = std::collections::HashSet::new();
+    let project_ids: Vec<i64> = input
+        .project_ids
+        .iter()
+        .copied()
+        .filter(|id| seen_p.insert(*id))
+        .collect();
+    if project_ids.len() > MAX_PROJECTS_PER_KEY {
+        return Err(format!(
+            "所属项目最多绑定 {MAX_PROJECTS_PER_KEY} 个"
+        ));
+    }
+
+    let mut seen_t = std::collections::HashSet::new();
+    let tags: Vec<String> = input
+        .tags
+        .iter()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .filter(|t| seen_t.insert(t.clone()))
+        .collect();
+    if tags.len() > MAX_TAGS_PER_KEY {
+        return Err(format!("标签最多 {MAX_TAGS_PER_KEY} 个（1 个自定义 + 1 个「订阅/按量计费」）"));
+    }
+    let fixed_count = tags.iter().filter(|t| FIXED_TAGS.contains(&t.as_str())).count();
+    if fixed_count > 1 {
+        return Err("固定标签只能在「订阅」和「按量计费」中二选一".into());
+    }
+
+    Ok((project_ids, tags))
+}
+
 impl VaultData {
     /// Insert or update an entry. `input.secret == None` keeps the stored
     /// secret, so editing an entry never has to round-trip the key material
     /// through the frontend.
     fn upsert_entry(&mut self, input: EntryInput, now: String) -> Result<&KeyEntry, String> {
+        let (project_ids, tags) = validate_input(&input)?;
         let idx = match input.id {
             Some(id) => {
                 let i = self
@@ -166,13 +209,13 @@ impl VaultData {
                     .ok_or("条目不存在")?;
                 let entry = &mut self.entries[i];
                 entry.title = input.title;
-                entry.project_ids = input.project_ids;
+                entry.project_ids = project_ids;
                 entry.base_url = input.base_url;
                 entry.docs_url = input.docs_url;
                 entry.console_url = input.console_url;
                 entry.purpose = input.purpose;
-                entry.used_in = input.used_in;
-                entry.tags = input.tags;
+                entry.model_id = input.model_id.trim().to_string();
+                entry.tags = tags;
                 entry.username = input.username;
                 entry.env_var = input.env_var;
                 entry.notes = input.notes;
@@ -188,13 +231,13 @@ impl VaultData {
                 self.entries.push(KeyEntry {
                     id,
                     title: input.title,
-                    project_ids: input.project_ids,
+                    project_ids,
                     base_url: input.base_url,
                     docs_url: input.docs_url,
                     console_url: input.console_url,
                     purpose: input.purpose,
-                    used_in: input.used_in,
-                    tags: input.tags,
+                    model_id: input.model_id.trim().to_string(),
+                    tags,
                     username: input.username,
                     env_var: input.env_var,
                     notes: input.notes,
@@ -492,6 +535,69 @@ pub fn vault_delete_provider(
     })
 }
 
+fn looks_like_anthropic(base_url: &str) -> bool {
+    base_url.to_lowercase().contains("anthropic")
+}
+
+fn join_models_url(base_url: &str) -> Result<String, String> {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("baseurl 不能为空".into());
+    }
+    Ok(format!("{trimmed}/models"))
+}
+
+/// Fetch available model IDs from a provider's `/models` endpoint.
+///
+/// Supports OpenAI-compatible providers (Authorization: Bearer <key>, response
+/// `{"data":[{"id":...}]}`) and Anthropic (x-api-key + anthropic-version,
+/// response `{"data":[{"id":...}]}`). The protocol is chosen by inspecting the
+/// base URL.
+#[tauri::command]
+pub async fn vault_fetch_models(
+    base_url: String,
+    api_key: String,
+) -> Result<Vec<String>, String> {
+    let url = join_models_url(&base_url)?;
+    let key = api_key.trim().to_string();
+    if key.is_empty() {
+        return Err("请先填写 key 再拉取模型".into());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let req = if looks_like_anthropic(&base_url) {
+        client
+            .get(&url)
+            .header("x-api-key", &key)
+            .header("anthropic-version", "2023-06-01")
+    } else {
+        client.get(&url).bearer_auth(&key)
+    };
+
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("拉取模型失败：HTTP {status}"));
+    }
+
+    let val: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let models = val
+        .get("data")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(models)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -571,7 +677,7 @@ mod tests {
             docs_url: String::new(),
             console_url: String::new(),
             purpose: String::new(),
-            used_in: String::new(),
+            model_id: String::new(),
             tags: vec![],
             username: String::new(),
             env_var: String::new(),
@@ -685,8 +791,8 @@ mod tests {
             docs_url: "https://platform.openai.com/docs".into(),
             console_url: "https://platform.openai.com/api-keys".into(),
             purpose: "生产环境".into(),
-            used_in: "zztodo, blog".into(),
-            tags: vec!["生产".into(), "付费".into()],
+            model_id: "gpt-4o-mini".into(),
+            tags: vec!["生产".into(), "订阅".into()],
             username: "me@example.com".into(),
             env_var: "OPENAI_API_KEY".into(),
             notes: "每月 200 刀额度".into(),
@@ -704,8 +810,8 @@ mod tests {
         assert_eq!(e.docs_url, "https://platform.openai.com/docs");
         assert_eq!(e.console_url, "https://platform.openai.com/api-keys");
         assert_eq!(e.purpose, "生产环境");
-        assert_eq!(e.used_in, "zztodo, blog");
-        assert_eq!(e.tags, vec!["生产".to_string(), "付费".to_string()]);
+        assert_eq!(e.model_id, "gpt-4o-mini");
+        assert_eq!(e.tags, vec!["生产".to_string(), "订阅".to_string()]);
         assert_eq!(e.username, "me@example.com");
         assert_eq!(e.env_var, "OPENAI_API_KEY");
         assert_eq!(e.notes, "每月 200 刀额度");
@@ -788,5 +894,91 @@ mod tests {
         let path = tmp_path("destroy-missing");
         assert!(!path.exists());
         remove_vault_files(&path).expect("destroying nothing must succeed");
+    }
+
+    fn tags_input(mut base: EntryInput, tags: Vec<&str>, projects: Vec<i64>) -> EntryInput {
+        base.tags = tags.into_iter().map(String::from).collect();
+        base.project_ids = projects;
+        base
+    }
+
+    #[test]
+    fn rejects_more_than_two_projects() {
+        let mut v = VaultData::empty();
+        let too_many = tags_input(input(None, "k", Some("s")), vec![], vec![1, 2, 3]);
+        let err = v.upsert_entry(too_many, "t".into()).unwrap_err();
+        assert!(err.contains("最多绑定"), "got: {err}");
+        assert_eq!(v.entries.len(), 0);
+    }
+
+    #[test]
+    fn accepts_two_projects_with_dedup() {
+        let mut v = VaultData::empty();
+        let ok = tags_input(input(None, "k", Some("s")), vec!["订阅"], vec![1, 2, 1]);
+        v.upsert_entry(ok, "t".into()).unwrap();
+        // The duplicate [1, 2, 1] must collapse to [1, 2] before storage.
+        assert_eq!(v.entries[0].project_ids, vec![1, 2]);
+    }
+
+    #[test]
+    fn rejects_more_than_two_tags() {
+        let mut v = VaultData::empty();
+        let too_many = tags_input(input(None, "k", Some("s")), vec!["a", "b", "c"], vec![]);
+        let err = v.upsert_entry(too_many, "t".into()).unwrap_err();
+        assert!(err.contains("最多"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_both_fixed_tags_at_once() {
+        let mut v = VaultData::empty();
+        let both = tags_input(
+            input(None, "k", Some("s")),
+            vec!["订阅", "按量计费"],
+            vec![],
+        );
+        let err = v.upsert_entry(both, "t".into()).unwrap_err();
+        assert!(err.contains("二选一"), "got: {err}");
+    }
+
+    #[test]
+    fn accepts_one_custom_plus_one_fixed() {
+        let mut v = VaultData::empty();
+        let ok = tags_input(input(None, "k", Some("s")), vec!["生产", "订阅"], vec![]);
+        v.upsert_entry(ok, "t".into()).unwrap();
+        assert_eq!(v.entries[0].tags, vec!["生产", "订阅"]);
+    }
+
+    #[test]
+    fn trims_and_dedupes_tags_keeping_order() {
+        let mut v = VaultData::empty();
+        let messy = tags_input(
+            input(None, "k", Some("s")),
+            vec![" 生产 ", "生产", "订阅", ""],
+            vec![],
+        );
+        v.upsert_entry(messy, "t".into()).unwrap();
+        assert_eq!(v.entries[0].tags, vec!["生产", "订阅"]);
+    }
+
+    #[test]
+    fn models_endpoint_strips_trailing_slash_and_appends_models() {
+        assert_eq!(
+            join_models_url("https://api.openai.com/v1").unwrap(),
+            "https://api.openai.com/v1/models"
+        );
+        assert_eq!(
+            join_models_url("https://api.openai.com/v1/").unwrap(),
+            "https://api.openai.com/v1/models"
+        );
+        assert!(join_models_url("").is_err());
+        assert!(join_models_url("   ").is_err());
+    }
+
+    #[test]
+    fn anthropic_detection_is_case_insensitive_and_substring_based() {
+        assert!(looks_like_anthropic("https://api.anthropic.com/v1"));
+        assert!(looks_like_anthropic("https://ANTHROPIC.example.com"));
+        assert!(looks_like_anthropic("https://relay.example.com/anthropic-proxy"));
+        assert!(!looks_like_anthropic("https://api.openai.com/v1"));
     }
 }

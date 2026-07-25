@@ -2,16 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Project } from "../../types";
 import { vaultApi } from "../../vault/api";
-import { copySecret, SECRET_TTL_SECONDS } from "../../vault/clipboard";
+import { copySecret, copyText, SECRET_TTL_SECONDS } from "../../vault/clipboard";
 import {
-  MAX_ATTACHMENT_SIZE,
   emptyEntryInput,
   entryToInput,
+  FIXED_TAGS,
   formatBytes,
+  joinTags,
+  MAX_ATTACHMENT_SIZE,
+  MAX_PROJECTS_PER_KEY,
+  MAX_TAGS_PER_KEY,
   providerOptions,
+  splitTags,
   type AttachmentMeta,
   type EntryInput,
   type EntryMeta,
+  type FixedTag,
   type ProviderOption,
   type ProviderTemplate,
 } from "../../vault/types";
@@ -37,17 +43,25 @@ export function KeyEditor({
   onVaultChanged: () => void;
 }) {
   const [form, setForm] = useState<EntryInput>(() =>
-    entry ? entryToInput(entry) : emptyEntryInput()
+    entry ? entryToInput(entry) : emptyEntryInput(),
   );
-  const [tagInput, setTagInput] = useState("");
+  const { custom: initialCustom, fixed: initialFixed } = splitTags(
+    entry?.tags ?? [],
+  );
+  const [customTag, setCustomTag] = useState(initialCustom);
+  const [fixedTag, setFixedTag] = useState<FixedTag | "">(initialFixed);
   const [showSecret, setShowSecret] = useState(false);
   const [secretLoaded, setSecretLoaded] = useState(!entry);
-  const [attachments, setAttachments] = useState<AttachmentMeta[]>(entry?.attachments ?? []);
+  const [attachments, setAttachments] = useState<AttachmentMeta[]>(
+    entry?.attachments ?? [],
+  );
   const [customProviders, setCustomProviders] = useState<ProviderTemplate[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fetchedModels, setFetchedModels] = useState<string[] | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof EntryInput>(k: K, v: EntryInput[K]) =>
@@ -107,19 +121,29 @@ export function KeyEditor({
     setPickerOpen(false);
   };
 
-  const addTag = () => {
-    const t = tagInput.trim();
-    if (t && !form.tags.includes(t)) set("tags", [...form.tags, t]);
-    setTagInput("");
+  /** Add or remove a project, capped at MAX_PROJECTS_PER_KEY. */
+  const toggleProject = (id: number) => {
+    const has = form.project_ids.includes(id);
+    if (has) {
+      set(
+        "project_ids",
+        form.project_ids.filter((x) => x !== id),
+      );
+      setError("");
+      return;
+    }
+    if (form.project_ids.length >= MAX_PROJECTS_PER_KEY) {
+      setError(`所属项目最多绑定 ${MAX_PROJECTS_PER_KEY} 个`);
+      return;
+    }
+    setError("");
+    set("project_ids", [...form.project_ids, id]);
   };
 
-  const toggleProject = (id: number) =>
-    set(
-      "project_ids",
-      form.project_ids.includes(id)
-        ? form.project_ids.filter((x) => x !== id)
-        : [...form.project_ids, id]
-    );
+  const setFixed = (next: FixedTag | "") => {
+    setFixedTag(next);
+    setError("");
+  };
 
   const importAttachment = async () => {
     if (!entry) return;
@@ -157,12 +181,51 @@ export function KeyEditor({
     }
   };
 
+  /** Pull model IDs from `<baseurl>/models` using the current secret. */
+  const fetchModels = async () => {
+    if (!form.base_url.trim()) {
+      setError("请先填写 baseurl 再拉取模型");
+      return;
+    }
+    let key = form.secret;
+    if (!key && entry) {
+      try {
+        key = await vaultApi.getSecret(entry.id);
+      } catch (e) {
+        setError(String(e));
+        return;
+      }
+    }
+    if (!key) {
+      setError("请先填写 key 再拉取模型");
+      return;
+    }
+    setError("");
+    setFetchingModels(true);
+    setFetchedModels(null);
+    try {
+      const models = await vaultApi.fetchModels(form.base_url.trim(), key);
+      setFetchedModels(models);
+      if (models.length === 0) onNotify("未取到任何模型 id");
+      else onNotify(`已拉取 ${models.length} 个模型`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
   const submit = async () => {
     if (!form.title.trim() || busy) return;
+    const tags = joinTags(customTag, fixedTag);
+    if (tags.length > MAX_TAGS_PER_KEY) {
+      setError(`标签最多 ${MAX_TAGS_PER_KEY} 个`);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await vaultApi.saveEntry(form);
+      await vaultApi.saveEntry({ ...form, tags });
       onSaved();
     } catch (e) {
       setError(String(e));
@@ -172,7 +235,8 @@ export function KeyEditor({
 
   const remove = async () => {
     if (!entry) return;
-    if (!window.confirm(`删除条目「${entry.title || "未命名"}」？此操作不可撤销。`)) return;
+    if (!window.confirm(`删除条目「${entry.title || "未命名"}」？此操作不可撤销。`))
+      return;
     try {
       await vaultApi.deleteEntry(entry.id);
       onDeleted();
@@ -182,6 +246,8 @@ export function KeyEditor({
   };
 
   const options = providerOptions(customProviders);
+  const previewTags = joinTags(customTag, fixedTag);
+  const modelIdCount = form.model_id.trim() ? 1 : 0;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -235,7 +301,14 @@ export function KeyEditor({
           </label>
 
           <div className="field">
-            <span>所属项目（可多选，留空为通用）</span>
+            <span>
+              所属项目（最多 {MAX_PROJECTS_PER_KEY} 个，留空为通用）
+              {form.project_ids.length > 0 && (
+                <span className="field-hint">
+                  {form.project_ids.length}/{MAX_PROJECTS_PER_KEY}
+                </span>
+              )}
+            </span>
             {projects.length === 0 ? (
               <p className="prov-hint">还没有项目</p>
             ) : (
@@ -259,21 +332,31 @@ export function KeyEditor({
             <div className="secret-row">
               <input
                 type={showSecret ? "text" : "password"}
-                value={
-                  form.secret === null ? "" : form.secret
-                }
+                value={form.secret === null ? "" : form.secret}
                 placeholder={
-                  entry && !secretLoaded ? "已保存（点 👁 查看或直接输入以替换）" : "粘贴 key"
+                  entry && !secretLoaded
+                    ? "已保存（点 👁 查看或直接输入以替换）"
+                    : "粘贴 key"
                 }
                 onChange={(e) => {
                   set("secret", e.target.value);
                   setSecretLoaded(true);
                 }}
               />
-              <button className="mini" type="button" title="显示 / 隐藏" onClick={revealSecret}>
+              <button
+                className="mini"
+                type="button"
+                title="显示 / 隐藏"
+                onClick={revealSecret}
+              >
                 {showSecret ? "🙈" : "👁"}
               </button>
-              <button className="mini" type="button" title="复制密码" onClick={copyCurrentSecret}>
+              <button
+                className="mini"
+                type="button"
+                title="复制密码"
+                onClick={copyCurrentSecret}
+              >
                 📋
               </button>
             </div>
@@ -335,37 +418,107 @@ export function KeyEditor({
             />
           </label>
 
-          <label className="field">
-            <span>已用</span>
-            <textarea
-              rows={2}
-              value={form.used_in}
-              onChange={(e) => set("used_in", e.target.value)}
-              placeholder="这个 key 已经用在哪些地方"
-            />
-          </label>
+          <div className="field">
+            <span>
+              模型 id（可选，最多 1 个。点「拉取模型」按 baseurl + key 取候选）
+              {modelIdCount > 0 && <span className="field-hint">{modelIdCount}/1</span>}
+            </span>
+            <div className="model-id-row">
+              <input
+                value={form.model_id}
+                onChange={(e) => set("model_id", e.target.value)}
+                placeholder="如 gpt-4o-mini"
+              />
+              <button
+                className="mini"
+                type="button"
+                disabled={fetchingModels}
+                onClick={fetchModels}
+              >
+                {fetchingModels ? "拉取中…" : "拉取模型"}
+              </button>
+              {form.model_id && (
+                <button
+                  className="mini"
+                  type="button"
+                  title="复制模型 id"
+                  onClick={async () => {
+                    await copyText(form.model_id);
+                    onNotify("已复制模型 id");
+                  }}
+                >
+                  📋
+                </button>
+              )}
+            </div>
+            {fetchedModels && (
+              <div className="model-picker">
+                <p className="prov-hint">
+                  拉取结果（点选填入，最多选 1 个；列表很长时可滚动）
+                </p>
+                <div className="model-picker-list">
+                  {fetchedModels.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`chip ${form.model_id === m ? "active" : ""}`}
+                      onClick={() => set("model_id", m)}
+                      title={m}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="field">
-            <span>标签</span>
-            <div className="tags editable">
-              {form.tags.map((t) => (
-                <span key={t} className="tag">
-                  {t}
-                  <button onClick={() => set("tags", form.tags.filter((x) => x !== t))}>×</button>
-                </span>
-              ))}
+            <span>
+              标签（最多 {MAX_TAGS_PER_KEY} 个：1 个自定义 + 「订阅/按量计费」二选一）
+            </span>
+            <div className="tags-editor">
               <input
-                className="tag-input"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTag();
-                  }
+                className="tag-input tag-input--solo"
+                value={customTag}
+                onChange={(e) => {
+                  setCustomTag(e.target.value);
+                  setError("");
                 }}
-                placeholder="回车添加"
+                placeholder="自定义标签（如 生产）"
               />
+              <div className="tag-fixed-row">
+                <span className="prov-hint">固定标签</span>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={`segmented-opt ${fixedTag === "" ? "active" : ""}`}
+                    onClick={() => setFixed("")}
+                  >
+                    无
+                  </button>
+                  {FIXED_TAGS.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={`segmented-opt ${fixedTag === t ? "active" : ""}`}
+                      onClick={() => setFixed(t)}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="tags">
+                {previewTags.map((t) => (
+                  <span key={t} className="tag">
+                    {t}
+                  </span>
+                ))}
+                {previewTags.length === 0 && (
+                  <span className="prov-hint">暂未选择标签</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -394,10 +547,16 @@ export function KeyEditor({
                         📎 {a.name}
                       </span>
                       <span className="attach-size">{formatBytes(a.size)}</span>
-                      <button className="mini" onClick={() => exportAttachment(a.name)}>
+                      <button
+                        className="mini"
+                        onClick={() => exportAttachment(a.name)}
+                      >
                         另存
                       </button>
-                      <button className="mini mini--danger" onClick={() => removeAttachment(a.name)}>
+                      <button
+                        className="mini mini--danger"
+                        onClick={() => removeAttachment(a.name)}
+                      >
                         删除
                       </button>
                     </div>
@@ -423,7 +582,11 @@ export function KeyEditor({
           <button className="btn" onClick={onClose}>
             取消
           </button>
-          <button className="btn primary" disabled={!form.title.trim() || busy} onClick={submit}>
+          <button
+            className="btn primary"
+            disabled={!form.title.trim() || busy}
+            onClick={submit}
+          >
             {busy ? "保存中…" : "保存"}
           </button>
         </footer>

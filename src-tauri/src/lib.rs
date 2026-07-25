@@ -83,7 +83,8 @@ pub fn run() {
             vault_commands::vault_remove_attachment,
             vault_commands::vault_list_providers,
             vault_commands::vault_save_provider,
-            vault_commands::vault_delete_provider
+            vault_commands::vault_delete_provider,
+            vault_commands::vault_fetch_models
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

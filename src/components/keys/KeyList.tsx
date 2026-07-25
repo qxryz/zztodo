@@ -73,6 +73,7 @@ export function KeyList({
         e.purpose.toLowerCase().includes(q) ||
         e.username.toLowerCase().includes(q) ||
         e.env_var.toLowerCase().includes(q) ||
+        e.model_id.toLowerCase().includes(q) ||
         e.tags.some((t) => t.toLowerCase().includes(q))
       );
     });
@@ -154,6 +155,11 @@ export function KeyList({
       onClick: copyField("环境变量名", entry.env_var),
     },
     {
+      label: "复制模型 id",
+      disabled: !entry.model_id,
+      onClick: copyField("模型 id", entry.model_id),
+    },
+    {
       label: "复制文档地址",
       disabled: !entry.docs_url,
       onClick: copyField("文档地址", entry.docs_url),
@@ -191,7 +197,7 @@ export function KeyList({
       <div className="key-toolbar">
         <div className="search">
           <input
-            placeholder="搜索条目名、用途、标签、用户名、环境变量…"
+            placeholder="搜索条目名、用途、标签、用户名、环境变量、模型 id…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

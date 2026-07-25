@@ -33,4 +33,7 @@ export const vaultApi = {
   saveProvider: (input: ProviderInput) =>
     invoke<ProviderTemplate[]>("vault_save_provider", { input }),
   deleteProvider: (id: number) => invoke<ProviderTemplate[]>("vault_delete_provider", { id }),
+
+  fetchModels: (baseUrl: string, apiKey: string) =>
+    invoke<string[]>("vault_fetch_models", { baseUrl, apiKey }),
 };

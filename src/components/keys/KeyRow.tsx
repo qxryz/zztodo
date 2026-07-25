@@ -59,6 +59,10 @@ export function KeyRow({
         {entry.env_var}
       </span>
 
+      <span className="key-model" title={entry.model_id || "未设置模型 id"}>
+        {entry.model_id || "—"}
+      </span>
+
       <div className="key-row-actions">
         {entry.attachments.length > 0 && (
           <span className="key-attach-count" title={`${entry.attachments.length} 个附件`}>
