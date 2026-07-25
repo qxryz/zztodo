@@ -5,6 +5,8 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Helvetica Neue", sans-serif;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  /* How strongly a sticky-marker tint paints a row; dark themes blend it down. */
+  --mark-mix: 100%;
 }
 
 :root[data-theme="dark"] {
@@ -21,6 +23,7 @@
   --accent-soft: rgba(79, 157, 255, 0.14);
   --danger: #ff5f57;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --mark-mix: 24%;
 }
 
 :root[data-theme="light"] {
@@ -36,6 +39,90 @@
   --accent: #2f7ff0;
   --accent-soft: rgba(47, 127, 240, 0.1);
   --danger: #e5484d;
+}
+
+/* 奶咖 — warm cream paper with a caramel accent. */
+:root[data-theme="latte"] {
+  --bg: #f4eee4;
+  --bg-elev: #fcfaf4;
+  --bg-card: #fcfaf4;
+  --bg-input: #eee6d7;
+  --border: #e4dac6;
+  --border-strong: #d2c3a8;
+  --text: #3d3325;
+  --text-dim: #7b6e59;
+  --text-faint: #a99b80;
+  --accent: #bd7a35;
+  --accent-soft: rgba(189, 122, 53, 0.13);
+  --danger: #cf5140;
+}
+
+/* 薄荷 — airy green-tinted light theme. */
+:root[data-theme="mint"] {
+  --bg: #edf5f0;
+  --bg-elev: #fafdfb;
+  --bg-card: #fafdfb;
+  --bg-input: #e1eee6;
+  --border: #d3e4d9;
+  --border-strong: #bad4c4;
+  --text: #1d3227;
+  --text-dim: #547061;
+  --text-faint: #89a294;
+  --accent: #1d9d68;
+  --accent-soft: rgba(29, 157, 104, 0.12);
+  --danger: #cf5140;
+}
+
+/* 樱花 — soft pink light theme. */
+:root[data-theme="sakura"] {
+  --bg: #f9f0f2;
+  --bg-elev: #fffbfc;
+  --bg-card: #fffbfc;
+  --bg-input: #f4e5ea;
+  --border: #ecd6dd;
+  --border-strong: #ddc0ca;
+  --text: #3c2630;
+  --text-dim: #7c5b68;
+  --text-faint: #ab92a0;
+  --accent: #d15c87;
+  --accent-soft: rgba(209, 92, 135, 0.12);
+  --danger: #cd443c;
+}
+
+/* 海洋 — deep blue dark theme. */
+:root[data-theme="ocean"] {
+  --bg: #0c1521;
+  --bg-elev: #121e2e;
+  --bg-card: #121e2e;
+  --bg-input: #192639;
+  --border: #233449;
+  --border-strong: #30445f;
+  --text: #e1ecf7;
+  --text-dim: #91a6bd;
+  --text-faint: #657a92;
+  --accent: #37b4e6;
+  --accent-soft: rgba(55, 180, 230, 0.15);
+  --danger: #ff6b63;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.4);
+  --mark-mix: 24%;
+}
+
+/* 石墨 — neutral gray dark theme with a muted amber accent. */
+:root[data-theme="graphite"] {
+  --bg: #181818;
+  --bg-elev: #202020;
+  --bg-card: #202020;
+  --bg-input: #292929;
+  --border: #333333;
+  --border-strong: #454545;
+  --text: #ebebeb;
+  --text-dim: #a2a2a2;
+  --text-faint: #747474;
+  --accent: #d2a94e;
+  --accent-soft: rgba(210, 169, 78, 0.16);
+  --danger: #ff6b63;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.4);
+  --mark-mix: 24%;
 }
 
 * {
@@ -616,23 +703,245 @@ input[type="range"] {
 
 /* ---------- settings ---------- */
 .settings-modal {
-  max-width: 420px;
+  max-width: 720px;
+  height: min(560px, 88vh);
 }
-.settings-row {
+.settings-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.settings-nav {
+  width: 148px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 10px;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-input) 45%, var(--bg-elev));
+}
+.settings-nav-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-.settings-row:last-of-type {
-  border-bottom: none;
-}
-.settings-row > span:first-child {
-  font-size: calc(13px * var(--fs, 1));
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: calc(12.5px * var(--fs, 1));
   font-weight: 500;
+  text-align: left;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+.settings-nav-item:hover {
+  background: var(--bg-input);
   color: var(--text);
 }
+.settings-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.settings-nav-icon {
+  font-size: calc(13px * var(--fs, 1));
+  width: 18px;
+  text-align: center;
+}
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 6px 22px 22px;
+  display: flex;
+  flex-direction: column;
+}
+.settings-group {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.settings-group:last-child {
+  border-bottom: none;
+}
+.settings-group-head {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings-group-title {
+  font-size: calc(13.5px * var(--fs, 1));
+  font-weight: 650;
+  color: var(--text);
+}
+.settings-group-desc {
+  font-size: calc(12px * var(--fs, 1));
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.settings-inline-hint {
+  font-size: calc(12px * var(--fs, 1));
+  color: var(--text-faint);
+  align-self: center;
+}
+.settings-inline-hint.ok {
+  color: var(--accent);
+}
+
+/* theme gallery */
+.theme-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  border-radius: 11px;
+  transition: all 0.15s;
+}
+.theme-card:hover {
+  border-color: var(--border-strong);
+}
+.theme-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.theme-card-preview {
+  position: relative;
+  height: 46px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+}
+.theme-card-window {
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  right: 7px;
+  bottom: 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.theme-card-dot {
+  position: absolute;
+  right: 12px;
+  bottom: 13px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.theme-card-half {
+  flex: 1;
+}
+.theme-card-half--light {
+  background: #f6f7f9;
+}
+.theme-card-half--dark {
+  background: #0f1115;
+}
+.theme-card-label {
+  font-size: calc(12px * var(--fs, 1));
+  color: var(--text-dim);
+  text-align: center;
+}
+.theme-card.active .theme-card-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* iOS-style switch */
+.switch {
+  flex-shrink: 0;
+  width: 42px;
+  height: 25px;
+  border-radius: 13px;
+  border: none;
+  background: var(--border-strong);
+  position: relative;
+  transition: background 0.18s;
+  padding: 0;
+}
+.switch.on {
+  background: var(--accent);
+}
+.switch-knob {
+  position: absolute;
+  top: 2.5px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s;
+}
+.switch.on .switch-knob {
+  transform: translateX(16px);
+}
+
+/* marker color drag list */
+.marker-colors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.marker-color {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: grab;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.marker-color:active {
+  cursor: grabbing;
+}
+.marker-color.drag-over {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.marker-color--white {
+  cursor: default;
+  border-style: dashed;
+}
+.marker-color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+}
+.marker-color-dot--white {
+  background: #ffffff;
+}
+.marker-color-name {
+  font-size: calc(11px * var(--fs, 1));
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.segmented--wrap {
+  flex-wrap: wrap;
+}
+
 .segmented {
   display: flex;
   background: var(--bg-input);
@@ -781,12 +1090,6 @@ input[type="range"] {
 }
 
 /* ---------- tag color palette (settings) ---------- */
-.tag-color-row,
-.palette-row {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-}
 .tag-swatches {
   display: flex;
   align-items: center;
@@ -1002,6 +1305,81 @@ input[type="range"] {
 }
 .key-toolbar .search {
   max-width: none;
+}
+
+/* ---------- sticky marker (key list tint cycling) ---------- */
+.marker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 8px 13px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  border-radius: 9px;
+  font-size: calc(12.5px * var(--fs, 1));
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.marker-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.marker-btn .marker-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mark);
+  border: 1px solid var(--border-strong);
+  transition: background 0.15s;
+}
+.marker-btn.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--mark) 70%, var(--border-strong));
+  background: color-mix(in srgb, var(--mark) 34%, var(--bg-input));
+}
+/* A marked row paints its whole card with the pastel tint; dark themes set
+   a lower --mark-mix so the tint blends into the card background and the
+   text stays readable. */
+.key-row.marked {
+  background: color-mix(in srgb, var(--mark) var(--mark-mix, 100%), var(--bg-card));
+  border-color: color-mix(in srgb, var(--mark) 60%, var(--border));
+}
+.key-row.marked:hover {
+  border-color: color-mix(in srgb, var(--mark) 75%, var(--border-strong));
+}
+.key-row.marked.selected {
+  border-color: var(--accent);
+}
+.key-row.marked .key-proj-badge {
+  background: color-mix(in srgb, var(--bg-card) 55%, transparent);
+}
+
+/* Small mark chip shown inside the key editor when the entry carries a tint. */
+.field-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.field-mark-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+}
+.field-mark-clear {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: calc(10px * var(--fs, 1));
+  padding: 0 2px;
+  border-radius: 4px;
+}
+.field-mark-clear:hover {
+  color: var(--danger);
 }
 .key-filters {
   flex-wrap: wrap;

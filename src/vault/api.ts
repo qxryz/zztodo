@@ -24,6 +24,8 @@ export const vaultApi = {
   getSecret: (id: number) => invoke<string>("vault_get_secret", { id }),
   saveEntry: (input: EntryInput) => invoke<EntryMeta>("vault_save_entry", { input }),
   deleteEntry: (id: number) => invoke<void>("vault_delete_entry", { id }),
+  /** Strip the sticky-marker tint from every entry; returns how many were colored. */
+  resetEntryColors: () => invoke<number>("vault_reset_entry_colors"),
 
   addAttachment: (id: number, filePath: string) =>
     invoke<AttachmentMeta[]>("vault_add_attachment", { id, filePath }),

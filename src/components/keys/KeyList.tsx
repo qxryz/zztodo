@@ -14,6 +14,7 @@ import {
   type VaultStatus,
 } from "../../vault/types";
 import { COL_KEYS, DEFAULT_COL_WIDTHS, type ColKey } from "../../vault/useKeyColumnWidths";
+import type { StickyMarker } from "../../useStickyMarker";
 import { KeyRow } from "./KeyRow";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyEditor } from "./KeyEditor";
@@ -31,6 +32,8 @@ export function KeyList({
   columnWidths,
   onColumnResize,
   columnLinesVisible,
+  marker,
+  refreshSignal,
 }: {
   status: VaultStatus;
   projects: Project[];
@@ -38,6 +41,9 @@ export function KeyList({
   columnWidths: Record<ColKey, number>;
   onColumnResize: (key: ColKey, value: number) => void;
   columnLinesVisible: boolean;
+  marker: StickyMarker;
+  /** Bumped by Settings' 粘性标记重置 so the list re-reads tints. */
+  refreshSignal: number;
 }) {
   const [entries, setEntries] = useState<EntryMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +76,7 @@ export function KeyList({
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshSignal]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -247,6 +253,20 @@ export function KeyList({
   return (
     <>
       <div className="key-toolbar">
+        {marker.enabled && (
+          <button
+            type="button"
+            className={`marker-btn ${marker.currentColor ? "active" : ""}`}
+            style={{ "--mark": marker.currentColor || "#ffffff" } as CSSProperties}
+            title={`粘性标记：${
+              marker.currentColor ? "新建条目将带上此颜色，点击切换" : "当前为原始色（白色），点击切换"
+            }`}
+            onClick={marker.advance}
+          >
+            <span className="marker-swatch" />
+            粘性标记
+          </button>
+        )}
         <div className="search">
           <input
             placeholder="搜索条目名、用途、标签、用户名、环境变量、模型 id…"
@@ -362,6 +382,7 @@ export function KeyList({
       {editing && (
         <KeyEditor
           entry={editing === "new" ? null : editing}
+          defaultColor={editing === "new" ? marker.currentColor : ""}
           projects={projects}
           onClose={() => setEditing(null)}
           onSaved={async () => {

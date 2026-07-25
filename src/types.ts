@@ -36,7 +36,31 @@ export const STATUS_META: Record<Status, { label: string; color: string }> = {
   archived: { label: "归档", color: "#6b7280" },
 };
 
-export type Theme = "light" | "dark" | "system";
+export type Theme =
+  | "light"
+  | "dark"
+  | "system"
+  | "latte"
+  | "mint"
+  | "sakura"
+  | "ocean"
+  | "graphite";
+
+/** Gallery metadata for the settings theme picker. `system` tracks the OS
+ * between light/dark and needs no palette of its own. */
+export const THEME_META: Record<
+  Theme,
+  { label: string; icon: string; dark: boolean; swatch: [string, string, string] | null }
+> = {
+  light: { label: "明亮", icon: "☀️", dark: false, swatch: ["#f6f7f9", "#ffffff", "#2f7ff0"] },
+  dark: { label: "暗夜", icon: "🌙", dark: true, swatch: ["#0f1115", "#171a21", "#4f9dff"] },
+  system: { label: "跟随系统", icon: "⌘", dark: false, swatch: null },
+  latte: { label: "奶咖", icon: "☕", dark: false, swatch: ["#f4eee4", "#fcfaf4", "#bd7a35"] },
+  mint: { label: "薄荷", icon: "🌿", dark: false, swatch: ["#edf5f0", "#fafdfb", "#1d9d68"] },
+  sakura: { label: "樱花", icon: "🌸", dark: false, swatch: ["#f9f0f2", "#fffbfc", "#d15c87"] },
+  ocean: { label: "海洋", icon: "🌊", dark: true, swatch: ["#0c1521", "#121e2e", "#37b4e6"] },
+  graphite: { label: "石墨", icon: "🪨", dark: true, swatch: ["#181818", "#202020", "#d2a94e"] },
+};
 
 export type FontScale = "sm" | "md" | "lg";
 

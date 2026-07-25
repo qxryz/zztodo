@@ -87,6 +87,7 @@ pub struct EntryMeta {
     pub console_url: String,
     pub purpose: String,
     pub model_id: String,
+    pub color: String,
     pub tags: Vec<String>,
     pub username: String,
     pub env_var: String,
@@ -106,6 +107,7 @@ fn to_meta(e: &KeyEntry) -> EntryMeta {
         console_url: e.console_url.clone(),
         purpose: e.purpose.clone(),
         model_id: e.model_id.clone(),
+        color: e.color.clone(),
         tags: e.tags.clone(),
         username: e.username.clone(),
         env_var: e.env_var.clone(),
@@ -133,6 +135,10 @@ pub struct EntryInput {
     pub console_url: String,
     pub purpose: String,
     pub model_id: String,
+    /// Sticky-marker tint; "" = unmarked. `#[serde(default)]` so older
+    /// frontends that don't send it still deserialize.
+    #[serde(default)]
+    pub color: String,
     pub tags: Vec<String>,
     pub username: String,
     pub env_var: String,
@@ -197,12 +203,28 @@ fn validate_input(input: &EntryInput) -> Result<(Vec<i64>, Vec<String>), String>
     Ok((project_ids, tags))
 }
 
+/// Accept "" (unmarked) or a #rrggbb hex tint; anything else is rejected so
+/// the vault never stores junk the row renderer can't parse.
+fn validate_color(raw: &str) -> Result<String, String> {
+    let c = raw.trim().to_lowercase();
+    if c.is_empty() {
+        return Ok(String::new());
+    }
+    let hex = c.strip_prefix('#').unwrap_or(&c);
+    if hex.len() == 6 && hex.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        Ok(format!("#{hex}"))
+    } else {
+        Err("颜色格式不正确（应为 #rrggbb）".into())
+    }
+}
+
 impl VaultData {
     /// Insert or update an entry. `input.secret == None` keeps the stored
     /// secret, so editing an entry never has to round-trip the key material
     /// through the frontend.
     fn upsert_entry(&mut self, input: EntryInput, now: String) -> Result<&KeyEntry, String> {
         let (project_ids, tags) = validate_input(&input)?;
+        let color = validate_color(&input.color)?;
         let idx = match input.id {
             Some(id) => {
                 let i = self
@@ -218,6 +240,7 @@ impl VaultData {
                 entry.console_url = input.console_url;
                 entry.purpose = input.purpose;
                 entry.model_id = input.model_id.trim().to_string();
+                entry.color = color;
                 entry.tags = tags;
                 entry.username = input.username;
                 entry.env_var = input.env_var;
@@ -240,6 +263,7 @@ impl VaultData {
                     console_url: input.console_url,
                     purpose: input.purpose,
                     model_id: input.model_id.trim().to_string(),
+                    color,
                     tags,
                     username: input.username,
                     env_var: input.env_var,
@@ -395,6 +419,22 @@ pub fn vault_delete_entry(state: State<VaultState>, id: i64) -> Result<(), Strin
     mutate(&state, |u| {
         u.data.entries.retain(|e| e.id != id);
         Ok(())
+    })
+}
+
+/// Sticky-marker reset: strip the tint from every entry, returning them all
+/// to the unmarked look. Returns how many entries were actually colored.
+#[tauri::command]
+pub fn vault_reset_entry_colors(state: State<VaultState>) -> Result<usize, String> {
+    mutate(&state, |u| {
+        let mut n = 0;
+        for e in u.data.entries.iter_mut() {
+            if !e.color.is_empty() {
+                e.color = String::new();
+                n += 1;
+            }
+        }
+        Ok(n)
     })
 }
 
@@ -836,6 +876,7 @@ mod tests {
             console_url: String::new(),
             purpose: String::new(),
             model_id: String::new(),
+            color: String::new(),
             tags: vec![],
             username: String::new(),
             env_var: String::new(),
@@ -950,6 +991,7 @@ mod tests {
             console_url: "https://platform.openai.com/api-keys".into(),
             purpose: "生产环境".into(),
             model_id: "gpt-4o-mini".into(),
+            color: "#ffe08a".into(),
             tags: vec!["生产".into(), "订阅".into()],
             username: "me@example.com".into(),
             env_var: "OPENAI_API_KEY".into(),
@@ -969,6 +1011,7 @@ mod tests {
         assert_eq!(e.console_url, "https://platform.openai.com/api-keys");
         assert_eq!(e.purpose, "生产环境");
         assert_eq!(e.model_id, "gpt-4o-mini");
+        assert_eq!(e.color, "#ffe08a");
         assert_eq!(e.tags, vec!["生产".to_string(), "订阅".to_string()]);
         assert_eq!(e.username, "me@example.com");
         assert_eq!(e.env_var, "OPENAI_API_KEY");
@@ -1385,5 +1428,41 @@ mod tests {
             FetchProtocol::parse(Some("ANTHROPIC")),
             FetchProtocol::Anthropic,
         );
+    }
+
+    #[test]
+    fn color_accepts_empty_and_hex_normalises_case() {
+        assert_eq!(validate_color("").unwrap(), "");
+        assert_eq!(validate_color("  ").unwrap(), "");
+        assert_eq!(validate_color("#FFE08A").unwrap(), "#ffe08a");
+        assert_eq!(validate_color("ffe08a").unwrap(), "#ffe08a");
+    }
+
+    #[test]
+    fn color_rejects_malformed_values() {
+        assert!(validate_color("#fff").is_err());
+        assert!(validate_color("#gggggg").is_err());
+        assert!(validate_color("red").is_err());
+    }
+
+    #[test]
+    fn color_survives_edit_and_clears_on_empty_input() {
+        let mut v = VaultData::empty();
+        let mut created = input(None, "k", Some("s"));
+        created.color = "#ffd6e7".into();
+        let id = v.upsert_entry(created, "t0".into()).unwrap().id;
+        assert_eq!(v.entries[0].color, "#ffd6e7");
+
+        // A normal edit carries the color back, so it is preserved.
+        let mut edit = input(Some(id), "k2", None);
+        edit.color = "#ffd6e7".into();
+        v.upsert_entry(edit, "t1".into()).unwrap();
+        assert_eq!(v.entries[0].color, "#ffd6e7");
+
+        // Reset semantics: sending "" strips the mark.
+        let mut cleared = input(Some(id), "k2", None);
+        cleared.color = String::new();
+        v.upsert_entry(cleared, "t2".into()).unwrap();
+        assert_eq!(v.entries[0].color, "");
     }
 }

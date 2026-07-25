@@ -25,6 +25,7 @@ import { ProviderManager } from "./ProviderManager";
 
 export function KeyEditor({
   entry,
+  defaultColor,
   projects,
   onClose,
   onSaved,
@@ -34,6 +35,8 @@ export function KeyEditor({
 }: {
   /** null = creating a new entry. */
   entry: EntryMeta | null;
+  /** Sticky-marker tint to stamp on a brand-new entry ("" = unmarked). */
+  defaultColor: string;
   projects: Project[];
   onClose: () => void;
   onSaved: () => void;
@@ -42,9 +45,12 @@ export function KeyEditor({
   /** Attachment edits write to the vault immediately, outside the save button. */
   onVaultChanged: () => void;
 }) {
-  const [form, setForm] = useState<EntryInput>(() =>
-    entry ? entryToInput(entry) : emptyEntryInput(),
-  );
+  const [form, setForm] = useState<EntryInput>(() => {
+    if (entry) return entryToInput(entry);
+    const blank = emptyEntryInput();
+    blank.color = defaultColor;
+    return blank;
+  });
   const { custom: initialCustom, fixed: initialFixed } = splitTags(
     entry?.tags ?? [],
   );
@@ -316,7 +322,24 @@ export function KeyEditor({
 
         <div className="modal-body">
           <label className="field">
-            <span>条目名</span>
+            <span>
+              条目名
+              {form.color && (
+                <span
+                  className="field-mark"
+                  title="粘性标记颜色（点 ✕ 移除）"
+                >
+                  <span className="field-mark-dot" style={{ background: form.color }} />
+                  <button
+                    type="button"
+                    className="field-mark-clear"
+                    onClick={() => set("color", "")}
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
+            </span>
             <input
               value={form.title}
               autoFocus

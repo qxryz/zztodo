@@ -5,6 +5,7 @@ import { useTheme } from "./useTheme";
 import { useFontScale } from "./useFontScale";
 import { useLayout } from "./useLayout";
 import { useTagColors } from "./useTagColors";
+import { useStickyMarker } from "./useStickyMarker";
 import { useAppMode } from "./useAppMode";
 import { ProjectCard } from "./components/ProjectCard";
 import { ProjectRow } from "./components/ProjectRow";
@@ -26,6 +27,7 @@ export default function App() {
   const { layout, setLayout } = useLayout();
   const { mode, setMode } = useAppMode();
   const tagColors = useTagColors();
+  const marker = useStickyMarker();
   const [projects, setProjects] = useState<Project[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -36,6 +38,8 @@ export default function App() {
   const autoLock = useAutoLock();
   const keyCols = useKeyColumnWidths();
   const keysMode = mode === "keys";
+  // Bumped when Settings resets sticky-marker colors so the key list re-reads.
+  const [keysVersion, setKeysVersion] = useState(0);
 
   // Auto-lock runs app-wide: switching to the projects page keeps the vault
   // unlocked, but the idle timer still ticks.
@@ -135,6 +139,8 @@ export default function App() {
           columnWidths={keyCols.widths}
           onColumnResize={keyCols.setWidth}
           columnLinesVisible={keyCols.linesVisible}
+          marker={marker}
+          refreshSignal={keysVersion}
         />
       ) : (
         <>
@@ -221,6 +227,9 @@ export default function App() {
           onResetKeyColumns={keyCols.reset}
           keyColumnLinesVisible={keyCols.linesVisible}
           onToggleKeyColumnLines={keyCols.toggleLinesVisible}
+          marker={marker}
+          vaultUnlocked={vault.unlocked}
+          onEntriesReset={() => setKeysVersion((v) => v + 1)}
           onClose={() => setSettingsOpen(false)}
         />
       )}

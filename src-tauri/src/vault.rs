@@ -38,6 +38,10 @@ pub struct KeyEntry {
     /// (which used to surface as a misleading "wrong password" error).
     #[serde(default)]
     pub model_id: String,
+    /// Sticky-marker tint (hex like "#ffe08a"), "" = unmarked. Added in
+    /// v0.1.14 — defaults for the same backward-compat reason as `model_id`.
+    #[serde(default)]
+    pub color: String,
     pub tags: Vec<String>,
     pub username: String,
     pub env_var: String,
@@ -179,6 +183,7 @@ mod tests {
             console_url: "https://platform.openai.com".into(),
             purpose: "开发测试".into(),
             model_id: "gpt-4o-mini".into(),
+            color: "".into(),
             tags: vec!["personal".into()],
             username: "me@example.com".into(),
             env_var: "OPENAI_API_KEY".into(),

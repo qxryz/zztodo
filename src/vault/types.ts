@@ -23,6 +23,8 @@ export interface EntryMeta {
   console_url: string;
   purpose: string;
   model_id: string;
+  /** Sticky-marker tint (#rrggbb); "" = unmarked. */
+  color: string;
   tags: string[];
   username: string;
   env_var: string;
@@ -41,6 +43,8 @@ export interface EntryInput {
   console_url: string;
   purpose: string;
   model_id: string;
+  /** Sticky-marker tint (#rrggbb); "" = unmarked. */
+  color: string;
   tags: string[];
   username: string;
   env_var: string;
@@ -111,6 +115,7 @@ export function emptyEntryInput(): EntryInput {
     console_url: "",
     purpose: "",
     model_id: "",
+    color: "",
     tags: [],
     username: "",
     env_var: "",
@@ -129,6 +134,7 @@ export function entryToInput(e: EntryMeta): EntryInput {
     console_url: e.console_url,
     purpose: e.purpose,
     model_id: e.model_id,
+    color: e.color,
     tags: [...e.tags],
     username: e.username,
     env_var: e.env_var,

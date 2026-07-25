@@ -31,10 +31,15 @@ export function KeyRow({
     await openUrl(url).catch(() => {});
   };
 
+  const marked = Boolean(entry.color);
+  const style: CSSProperties = marked
+    ? { ...columnStyle, "--mark": entry.color } as CSSProperties
+    : columnStyle ?? {};
+
   return (
     <div
-      className={`key-row ${selected ? "selected" : ""}`}
-      style={columnStyle}
+      className={`key-row ${selected ? "selected" : ""} ${marked ? "marked" : ""}`}
+      style={style}
       onClick={onSelect}
       onDoubleClick={onOpen}
       onContextMenu={onContextMenu}

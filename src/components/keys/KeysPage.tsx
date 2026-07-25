@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Project } from "../../types";
+import type { StickyMarker } from "../../useStickyMarker";
 import { vaultApi } from "../../vault/api";
 import { MASTER_PASSWORD_WARNING, formatBytes, type VaultStatus } from "../../vault/types";
 import type { ColKey } from "../../vault/useKeyColumnWidths";
@@ -14,6 +15,8 @@ export function KeysPage({
   columnWidths,
   onColumnResize,
   columnLinesVisible,
+  marker,
+  refreshSignal,
 }: {
   status: VaultStatus | null;
   projects: Project[];
@@ -21,6 +24,8 @@ export function KeysPage({
   columnWidths: Record<ColKey, number>;
   onColumnResize: (key: ColKey, value: number) => void;
   columnLinesVisible: boolean;
+  marker: StickyMarker;
+  refreshSignal: number;
 }) {
   if (!status) return <div className="empty">加载中…</div>;
   if (status.state === "uninitialized") return <SetupView onCreated={onStatus} />;
@@ -33,6 +38,8 @@ export function KeysPage({
       columnWidths={columnWidths}
       onColumnResize={onColumnResize}
       columnLinesVisible={columnLinesVisible}
+      marker={marker}
+      refreshSignal={refreshSignal}
     />
   );
 }

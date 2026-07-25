@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
-import type { Theme } from "./types";
+import { THEME_META, type Theme } from "./types";
 
 const KEY = "zztodo-theme";
 
+/** Stored value from before new themes existed might be anything; fall back. */
+function read(): Theme {
+  const raw = localStorage.getItem(KEY) as Theme | null;
+  return raw && raw in THEME_META ? raw : "system";
+}
+
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(KEY) as Theme) || "system"
-  );
+  const [theme, setTheme] = useState<Theme>(read);
 
   useEffect(() => {
     localStorage.setItem(KEY, theme);

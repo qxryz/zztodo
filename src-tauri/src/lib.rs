@@ -78,6 +78,7 @@ pub fn run() {
             vault_commands::vault_get_secret,
             vault_commands::vault_save_entry,
             vault_commands::vault_delete_entry,
+            vault_commands::vault_reset_entry_colors,
             vault_commands::vault_add_attachment,
             vault_commands::vault_save_attachment_to,
             vault_commands::vault_remove_attachment,
