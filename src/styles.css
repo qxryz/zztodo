@@ -1048,42 +1048,51 @@ input[type="range"] {
     var(--col-actions, 84px)
     var(--col-updated, 78px);
   gap: 12px;
-  height: 12px;
+  /* Tall enough to be obviously clickable, with a visible grip pattern. */
+  height: 22px;
   margin: 0 20px;
   user-select: none;
 }
 .key-col-strip-cell {
   position: relative;
   height: 100%;
-  border-bottom: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .key-col-handle {
   position: absolute;
   top: 0;
-  right: -6px;
-  width: 12px;
+  right: -10px;
+  width: 20px;
   height: 100%;
   cursor: col-resize;
-  /* Hidden by default; widened on hover for discoverability. */
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+/* Always-visible central divider so the user can find the handles. */
 .key-col-handle::after {
   content: "";
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  left: 50%;
-  width: 1px;
-  transform: translateX(-0.5px);
-  background: transparent;
-  transition: background 0.12s;
-}
-.key-col-strip:hover .key-col-handle::after,
-.key-col-handle:hover::after {
-  background: var(--border-strong);
-}
-.key-col-handle:hover::after {
   width: 2px;
-  transform: translateX(-1px);
+  height: 14px;
+  background: var(--border-strong);
+  border-radius: 1px;
+  box-shadow:
+    4px 0 0 var(--border-strong),
+    -4px 0 0 var(--border-strong);
+  transition: background 0.12s, width 0.12s, box-shadow 0.12s;
+}
+.key-col-handle:hover::after {
+  background: var(--accent);
+  width: 3px;
+  box-shadow:
+    5px 0 0 var(--accent),
+    -5px 0 0 var(--accent);
+}
+/* Slightly nudge the strip's bottom border into accent on hover too, so the
+   whole row divider feels "alive" when the cursor is near a handle. */
+.key-col-strip:hover .key-col-strip-cell {
+  border-bottom-color: var(--border-strong);
 }
 .key-row:hover {
   border-color: var(--border-strong);

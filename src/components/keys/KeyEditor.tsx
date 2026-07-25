@@ -62,7 +62,7 @@ export function KeyEditor({
   const [busy, setBusy] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<string[] | null>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
-  const [fetchProtocol, setFetchProtocol] = useState<FetchProtocol>("auto");
+  const [fetchProtocol, setFetchProtocol] = useState<FetchProtocol>("openai");
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof EntryInput>(k: K, v: EntryInput[K]) =>
@@ -440,7 +440,6 @@ export function KeyEditor({
                   [
                     ["openai", "OpenAI 兼容"],
                     ["anthropic", "Anthropic 兼容"],
-                    ["auto", "自动"],
                   ] as const
                 ).map(([v, label]) => (
                   <button

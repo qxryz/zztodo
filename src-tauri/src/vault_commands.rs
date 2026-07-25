@@ -544,15 +544,13 @@ pub fn vault_delete_provider(
     })
 }
 
-fn looks_like_anthropic(base_url: &str) -> bool {
-    base_url.to_lowercase().contains("anthropic")
-}
-
-/// User-selectable protocol for `vault_fetch_models`. `auto` falls back to
-/// the URL substring heuristic in `looks_like_anthropic`.
+/// User-selectable protocol for `vault_fetch_models`. The protocol is decided
+/// entirely on the frontend (it inherits from the chosen provider template,
+/// or the user toggles it manually); the backend no longer auto-detects from
+/// the baseurl — that heuristic was wrong for any gateway that didn't embed
+/// the literal "anthropic" string in its URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FetchProtocol {
-    Auto,
     OpenAi,
     Anthropic,
 }
@@ -560,18 +558,10 @@ enum FetchProtocol {
 impl FetchProtocol {
     fn parse(raw: Option<&str>) -> Self {
         match raw.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
-            Some("openai") => Self::OpenAi,
             Some("anthropic") => Self::Anthropic,
-            // None / "" / "auto" / anything unrecognised: defer to the URL hint.
-            _ => Self::Auto,
-        }
-    }
-
-    fn from_url(base_url: &str) -> Self {
-        if looks_like_anthropic(base_url) {
-            Self::Anthropic
-        } else {
-            Self::OpenAi
+            // None / "" / "openai" / anything unrecognised: fall back to OpenAI
+            // (Bearer auth) — the common case.
+            _ => Self::OpenAi,
         }
     }
 }
@@ -600,9 +590,8 @@ fn join_models_url(base_url: &str) -> Result<String, String> {
 ///
 /// Supports OpenAI-compatible providers (Authorization: Bearer <key>, response
 /// `{"data":[{"id":...}]}`) and Anthropic (x-api-key + anthropic-version,
-/// response `{"data":[{"id":...}]}`). The protocol can be chosen explicitly
-/// via the `protocol` argument (`"openai"` or `"anthropic"`); otherwise it
-/// falls back to inspecting the base URL for the substring "anthropic".
+/// response `{"data":[{"id":...}]}`). The protocol is supplied by the
+/// frontend — typically inherited from the chosen provider template.
 #[tauri::command]
 pub async fn vault_fetch_models(
     base_url: String,
@@ -615,10 +604,7 @@ pub async fn vault_fetch_models(
         return Err("请先填写 key 再拉取模型".into());
     }
 
-    let picked = match FetchProtocol::parse(protocol.as_deref()) {
-        FetchProtocol::Auto => FetchProtocol::from_url(&base_url),
-        explicit => explicit,
-    };
+    let picked = FetchProtocol::parse(protocol.as_deref());
 
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -637,47 +623,116 @@ pub async fn vault_fetch_models(
         FetchProtocol::OpenAi => {
             req = req.bearer_auth(&key);
         }
-        FetchProtocol::Auto => unreachable!("Auto is resolved before matching"),
     }
 
     let resp = req.send().await.map_err(|e| format!("网络错误：{url}：{e}"))?;
     let status = resp.status();
+    // Read body as text first so we can both (a) parse JSON from it and
+    // (b) include a snippet in any error message — a bare `.json()` consumes
+    // the body without telling us what was actually returned.
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("读取响应失败：{url}：{e}"))?;
+
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        let snippet: String = body.chars().take(200).collect();
-        let snippet = snippet.replace('\n', " ");
+        let snippet = snippet_of(&body);
         return Err(format!(
             "拉取模型失败：{url} HTTP {status} {snippet}"
         ));
     }
 
-    let val: serde_json::Value = resp.json().await.map_err(|e| {
-        format!("返回非 JSON（可能是 CDN/网关拦截页）：{url}：{e}")
+    let val: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+        let snippet = snippet_of(&body);
+        format!("返回非 JSON：{url}\n  解析错误：{e}\n  响应片段：{snippet}")
     })?;
 
-    let data = val
-        .get("data")
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| {
-            let keys = val
-                .as_object()
-                .map(|o| {
-                    let mut ks: Vec<&String> = o.keys().collect();
-                    ks.sort();
-                    ks.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",")
-                })
-                .unwrap_or_else(|| "(非 JSON 对象)".to_string());
-            format!(
-                "返回结构里没有 data 数组（看到的字段：{keys}）。{url}"
-            )
-        })?;
+    parse_model_ids(&val).map_err(|reason| {
+        let snippet = snippet_of(&body);
+        format!("{reason}\n  URL：{url}\n  响应片段：{snippet}")
+    })
+}
 
-    let models: Vec<String> = data
+/// First 200 chars of a body, single-line — for error diagnostics.
+fn snippet_of(body: &str) -> String {
+    let s: String = body.chars().take(200).collect();
+    s.replace('\n', " ")
+}
+
+/// Extract model IDs from a `/models`-style payload. Tolerant of common
+/// response shapes so a small format difference doesn't gate the whole
+/// feature.
+///
+/// Accepts top-level `data` (OpenAI, Anthropic), `models` (Gemini-style,
+/// some gateways), or a bare JSON array. Inside each entry, looks for `id`,
+/// `name`, or `model`. If we can't find any recognisable array, returns the
+/// reason so the caller can show a useful error to the user.
+fn parse_model_ids(val: &serde_json::Value) -> Result<Vec<String>, String> {
+    let array_value: Option<&serde_json::Value> = val
+        .get("data")
+        .or_else(|| val.get("models"))
+        .or_else(|| if val.is_array() { Some(val) } else { None });
+
+    let arr = match array_value {
+        Some(v) => v,
+        None => {
+            return Err(format!(
+                "返回结构里既没有 data 也没有 models 数组（看到的字段：{}）",
+                list_keys(val)
+            ));
+        }
+    };
+
+    let arr = match arr.as_array() {
+        Some(a) => a,
+        None => {
+            return Err(format!(
+                "data/models 字段不是数组（看到的字段：{}）",
+                list_keys(val)
+            ));
+        }
+    };
+
+    let models: Vec<String> = arr
         .iter()
-        .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
+        .filter_map(|m| {
+            m.get("id")
+                .or_else(|| m.get("name"))
+                .or_else(|| m.get("model"))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
         .collect();
 
+    if models.is_empty() && !arr.is_empty() {
+        return Err(format!(
+            "数组里有 {} 个条目，但都缺少 id/name/model 字段（看到的字段：{}）",
+            arr.len(),
+            list_sample_keys(&arr[0]),
+        ));
+    }
+
     Ok(models)
+}
+
+fn list_keys(val: &serde_json::Value) -> String {
+    val.as_object()
+        .map(|o| {
+            let mut ks: Vec<&String> = o.keys().collect();
+            ks.sort();
+            ks.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",")
+        })
+        .unwrap_or_else(|| "(非 JSON 对象)".to_string())
+}
+
+fn list_sample_keys(val: &serde_json::Value) -> String {
+    val.as_object()
+        .map(|o| {
+            let mut ks: Vec<&String> = o.keys().collect();
+            ks.sort();
+            ks.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",")
+        })
+        .unwrap_or_else(|| "(非 JSON 对象)".to_string())
 }
 
 #[cfg(test)]
@@ -1135,45 +1190,133 @@ mod tests {
     }
 
     #[test]
-    fn anthropic_detection_is_case_insensitive_and_substring_based() {
-        assert!(looks_like_anthropic("https://api.anthropic.com/v1"));
-        assert!(looks_like_anthropic("https://ANTHROPIC.example.com"));
-        assert!(looks_like_anthropic("https://relay.example.com/anthropic-proxy"));
-        assert!(!looks_like_anthropic("https://api.openai.com/v1"));
+    fn parse_model_ids_openai_anthropic_shape() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"object":"list","data":[
+                {"id":"gpt-4o","object":"model"},
+                {"id":"claude-3-5-sonnet","object":"model"}
+            ]}"#,
+        )
+        .unwrap();
+        let ids = parse_model_ids(&v).unwrap();
+        assert_eq!(ids, vec!["gpt-4o", "claude-3-5-sonnet"]);
     }
 
     #[test]
-    fn fetch_protocol_parse_normalises_input() {
-        assert_eq!(FetchProtocol::parse(None), FetchProtocol::Auto);
-        assert_eq!(FetchProtocol::parse(Some("")), FetchProtocol::Auto);
-        assert_eq!(FetchProtocol::parse(Some("auto")), FetchProtocol::Auto);
-        assert_eq!(FetchProtocol::parse(Some("  auto  ")), FetchProtocol::Auto);
+    fn parse_model_ids_models_key_fallback() {
+        // Some gateways (Gemini-style, certain Anthropic-compat relays) wrap
+        // the array under "models" instead of "data".
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"models":[
+                {"name":"models/gemini-pro"},
+                {"name":"models/gemini-flash"}
+            ]}"#,
+        )
+        .unwrap();
+        let ids = parse_model_ids(&v).unwrap();
+        assert_eq!(ids, vec!["models/gemini-pro", "models/gemini-flash"]);
+    }
+
+    #[test]
+    fn parse_model_ids_accepts_bare_array() {
+        let v: serde_json::Value =
+            serde_json::from_str(r#"[{"id":"a"},{"id":"b"}]"#).unwrap();
+        assert_eq!(parse_model_ids(&v).unwrap(), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn parse_model_ids_empty_array_is_empty_list_not_error() {
+        let v: serde_json::Value = serde_json::from_str(r#"{"data":[]}"#).unwrap();
+        assert_eq!(parse_model_ids(&v).unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn parse_model_ids_falls_back_to_name_field() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"data":[{"name":"claude","type":"model"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(parse_model_ids(&v).unwrap(), vec!["claude"]);
+    }
+
+    #[test]
+    fn parse_model_ids_mixed_keys_within_array() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"data":[
+                {"id":"gpt-4o"},
+                {"name":"claude"},
+                {"model":"mistral-large"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            parse_model_ids(&v).unwrap(),
+            vec!["gpt-4o", "claude", "mistral-large"]
+        );
+    }
+
+    #[test]
+    fn parse_model_ids_missing_keys_errors_with_diagnosis() {
+        let v: serde_json::Value = serde_json::from_str(r#"{"foo":"bar"}"#).unwrap();
+        let err = parse_model_ids(&v).unwrap_err();
+        assert!(err.contains("看到的字段"), "got: {err}");
+        assert!(err.contains("foo"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_model_ids_array_without_id_errors_with_hint() {
+        // Each entry has only "type" — no id/name/model.
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"data":[{"type":"model"},{"type":"model"}]}"#,
+        )
+        .unwrap();
+        let err = parse_model_ids(&v).unwrap_err();
+        assert!(err.contains("id/name/model"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_model_ids_non_object_array_errors() {
+        let v: serde_json::Value = serde_json::from_str(r#"{"data":"oops"}"#).unwrap();
+        let err = parse_model_ids(&v).unwrap_err();
+        assert!(err.contains("不是数组"), "got: {err}");
+    }
+
+    #[test]
+    fn snippet_of_truncates_long_bodies() {
+        let long = "a".repeat(500);
+        let s = snippet_of(&long);
+        assert_eq!(s.chars().count(), 200);
+    }
+
+    #[test]
+    fn snippet_of_collapses_newlines() {
+        let body = "first line\nsecond line\nthird";
+        let s = snippet_of(body);
+        assert_eq!(s, "first line second line third");
+    }
+
+    #[test]
+    fn fetch_protocol_parse_accepts_explicit_choices_and_defaults_to_openai() {
+        // None / "" / "openai" / random text → OpenAI (Bearer, the common case).
+        assert_eq!(FetchProtocol::parse(None), FetchProtocol::OpenAi);
+        assert_eq!(FetchProtocol::parse(Some("")), FetchProtocol::OpenAi);
         assert_eq!(FetchProtocol::parse(Some("openai")), FetchProtocol::OpenAi);
         assert_eq!(FetchProtocol::parse(Some("OPENAI")), FetchProtocol::OpenAi);
+        assert_eq!(FetchProtocol::parse(Some("  openai  ")), FetchProtocol::OpenAi);
+        assert_eq!(FetchProtocol::parse(Some("bogus")), FetchProtocol::OpenAi);
+        // "auto" used to mean "look at the URL" — that heuristic is gone. The
+        // legacy "auto" value now also collapses to OpenAI so old client code
+        // never accidentally hits a 401 because we routed to Bearer on a URL
+        // that happens not to contain "anthropic".
+        assert_eq!(FetchProtocol::parse(Some("auto")), FetchProtocol::OpenAi);
+        // Only the explicit Anthropic string opts into x-api-key auth.
         assert_eq!(
             FetchProtocol::parse(Some("anthropic")),
-            FetchProtocol::Anthropic
-        );
-        // Garbage in falls back to Auto rather than panicking.
-        assert_eq!(FetchProtocol::parse(Some("bogus")), FetchProtocol::Auto);
-    }
-
-    #[test]
-    fn fetch_protocol_from_url_defaults_anthropic_substring() {
-        assert_eq!(
-            FetchProtocol::from_url("https://api.anthropic.com/v1"),
             FetchProtocol::Anthropic,
         );
         assert_eq!(
-            FetchProtocol::from_url("https://api.openai.com/v1"),
-            FetchProtocol::OpenAi,
-        );
-        // A gateway exposing Anthropic-compatible format but without the
-        // "anthropic" substring must NOT be silently routed to OpenAI; the
-        // frontend's explicit picker is the only way to opt in.
-        assert_eq!(
-            FetchProtocol::from_url("https://relay.example.com/gateway/v1"),
-            FetchProtocol::OpenAi,
+            FetchProtocol::parse(Some("ANTHROPIC")),
+            FetchProtocol::Anthropic,
         );
     }
 }
