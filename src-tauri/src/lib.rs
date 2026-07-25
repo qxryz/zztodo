@@ -1,6 +1,7 @@
 mod db;
 mod models;
 mod scan;
+mod vault;
 
 use db::Db;
 use models::{FolderScan, Project, ProjectInput};
