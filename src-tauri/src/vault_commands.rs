@@ -566,7 +566,7 @@ impl FetchProtocol {
     }
 }
 
-fn join_models_url(base_url: &str) -> Result<String, String> {
+fn join_models_url(base_url: &str, is_anthropic: bool) -> Result<String, String> {
     let trimmed = base_url.trim();
     if trimmed.is_empty() {
         return Err("baseurl 不能为空".into());
@@ -577,6 +577,14 @@ fn join_models_url(base_url: &str) -> Result<String, String> {
         .path_segments()
         .map(|s| s.filter(|p| !p.is_empty()).map(String::from).collect())
         .unwrap_or_default();
+    // Anthropic-compatible `/models` endpoints live under `/v1/models`.
+    // When the caller's baseurl omits the `/v1` segment (typical of a
+    // gateway root, e.g. `https://api.minimaxi.com/anthropic` instead of
+    // `…/anthropic/v1`), inject it so we hit the real endpoint instead of
+    // getting a 404 on `…/anthropic/models`.
+    if is_anthropic && !segs.iter().any(|s| s == "v1") {
+        segs.push("v1".to_string());
+    }
     segs.push("models".to_string());
     url.set_path(&format!("/{}", segs.join("/")));
     // /models should be called bare: any pre-existing query/fragment in the
@@ -598,13 +606,12 @@ pub async fn vault_fetch_models(
     api_key: String,
     protocol: Option<String>,
 ) -> Result<Vec<String>, String> {
-    let url = join_models_url(&base_url)?;
+    let picked = FetchProtocol::parse(protocol.as_deref());
+    let url = join_models_url(&base_url, picked == FetchProtocol::Anthropic)?;
     let key = api_key.trim().to_string();
     if key.is_empty() {
         return Err("请先填写 key 再拉取模型".into());
     }
-
-    let picked = FetchProtocol::parse(protocol.as_deref());
 
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -1121,7 +1128,11 @@ mod tests {
                 "http://localhost:11434/v1/models",
             ),
         ] {
-            assert_eq!(join_models_url(input).unwrap(), want, "{input}");
+            assert_eq!(
+                join_models_url(input, false).unwrap(),
+                want,
+                "{input}"
+            );
         }
     }
 
@@ -1130,21 +1141,63 @@ mod tests {
         // Query/fragment on the baseurl must NOT bleed into /models — most
         // providers won't recognise `…/models?key=foo` as the right endpoint.
         assert_eq!(
-            join_models_url("https://api.openai.com/v1?foo=bar").unwrap(),
+            join_models_url("https://api.openai.com/v1?foo=bar", false).unwrap(),
             "https://api.openai.com/v1/models"
         );
         assert_eq!(
-            join_models_url("https://api.openai.com/v1#frag").unwrap(),
+            join_models_url("https://api.openai.com/v1#frag", false).unwrap(),
             "https://api.openai.com/v1/models"
         );
     }
 
     #[test]
     fn models_endpoint_rejects_empty_and_invalid() {
-        assert!(join_models_url("").is_err());
-        assert!(join_models_url("   ").is_err());
+        assert!(join_models_url("", false).is_err());
+        assert!(join_models_url("   ", false).is_err());
         // Not a parseable URL → friendly error.
-        assert!(join_models_url("not a url").is_err());
+        assert!(join_models_url("not a url", false).is_err());
+    }
+
+    #[test]
+    fn anthropic_endpoint_inserts_v1_when_missing() {
+        // The MiniMax case from a real user: baseurl points at the Anthropic
+        // gateway root without `/v1`, so naive append → 404. Inserting /v1
+        // turns it into the canonical Anthropic models path.
+        assert_eq!(
+            join_models_url("https://api.minimaxi.com/anthropic", true).unwrap(),
+            "https://api.minimaxi.com/anthropic/v1/models"
+        );
+        // A trailing slash on the gateway root must not break the heuristic.
+        assert_eq!(
+            join_models_url("https://api.minimaxi.com/anthropic/", true).unwrap(),
+            "https://api.minimaxi.com/anthropic/v1/models"
+        );
+        // Direct Anthropic endpoint already includes /v1 — no duplicate.
+        assert_eq!(
+            join_models_url("https://api.anthropic.com/v1", true).unwrap(),
+            "https://api.anthropic.com/v1/models"
+        );
+        // Anthropic-style gateway that already has /v1 — no insert.
+        assert_eq!(
+            join_models_url("https://gateway.example.com/anthropic/v1", true).unwrap(),
+            "https://gateway.example.com/anthropic/v1/models"
+        );
+    }
+
+    #[test]
+    fn openai_endpoint_does_not_insert_v1() {
+        // OpenAI protocol must NOT silently add /v1 — the user is responsible
+        // for setting the right baseurl.
+        assert_eq!(
+            join_models_url("https://api.openai.com", false).unwrap(),
+            "https://api.openai.com/models"
+        );
+        // And even when the protocol is anthropic, if the path already has
+        // /v1 we never stack another one.
+        assert_eq!(
+            join_models_url("https://x.com/v1", true).unwrap(),
+            "https://x.com/v1/models"
+        );
     }
 
     #[test]
