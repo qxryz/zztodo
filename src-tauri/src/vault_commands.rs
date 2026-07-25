@@ -139,6 +139,64 @@ pub struct ProviderInput {
 
 const ERR_LOCKED: &str = "库未解锁";
 
+impl VaultData {
+    /// Insert or update an entry. `input.secret == None` keeps the stored
+    /// secret, so editing an entry never has to round-trip the key material
+    /// through the frontend.
+    fn upsert_entry(&mut self, input: EntryInput, now: String) -> Result<&KeyEntry, String> {
+        let idx = match input.id {
+            Some(id) => {
+                let i = self
+                    .entries
+                    .iter()
+                    .position(|e| e.id == id)
+                    .ok_or("条目不存在")?;
+                let entry = &mut self.entries[i];
+                entry.title = input.title;
+                entry.project_ids = input.project_ids;
+                entry.base_url = input.base_url;
+                entry.docs_url = input.docs_url;
+                entry.console_url = input.console_url;
+                entry.purpose = input.purpose;
+                entry.used_in = input.used_in;
+                entry.tags = input.tags;
+                entry.username = input.username;
+                entry.env_var = input.env_var;
+                entry.notes = input.notes;
+                if let Some(secret) = input.secret {
+                    entry.secret = secret;
+                }
+                entry.updated_at = now;
+                i
+            }
+            None => {
+                let id = self.next_id;
+                self.next_id += 1;
+                self.entries.push(KeyEntry {
+                    id,
+                    title: input.title,
+                    project_ids: input.project_ids,
+                    base_url: input.base_url,
+                    docs_url: input.docs_url,
+                    console_url: input.console_url,
+                    purpose: input.purpose,
+                    used_in: input.used_in,
+                    tags: input.tags,
+                    username: input.username,
+                    env_var: input.env_var,
+                    notes: input.notes,
+                    secret: input.secret.unwrap_or_default(),
+                    attachments: Vec::new(),
+                    created_at: now.clone(),
+                    updated_at: now,
+                });
+                self.entries.len() - 1
+            }
+        };
+        Ok(&self.entries[idx])
+    }
+}
+
 fn with_unlocked<T>(
     state: &VaultState,
     f: impl FnOnce(&mut Unlocked) -> Result<T, String>,
@@ -250,57 +308,8 @@ pub fn vault_get_secret(state: State<VaultState>, id: i64) -> Result<String, Str
 #[tauri::command]
 pub fn vault_save_entry(state: State<VaultState>, input: EntryInput) -> Result<EntryMeta, String> {
     mutate(&state, |u| {
-        let now = now_iso();
-        match input.id {
-            Some(id) => {
-                let entry = u
-                    .data
-                    .entries
-                    .iter_mut()
-                    .find(|e| e.id == id)
-                    .ok_or("条目不存在")?;
-                entry.title = input.title;
-                entry.project_ids = input.project_ids;
-                entry.base_url = input.base_url;
-                entry.docs_url = input.docs_url;
-                entry.console_url = input.console_url;
-                entry.purpose = input.purpose;
-                entry.used_in = input.used_in;
-                entry.tags = input.tags;
-                entry.username = input.username;
-                entry.env_var = input.env_var;
-                entry.notes = input.notes;
-                if let Some(secret) = input.secret {
-                    entry.secret = secret;
-                }
-                entry.updated_at = now;
-                Ok(to_meta(entry))
-            }
-            None => {
-                let id = u.data.next_id;
-                u.data.next_id += 1;
-                let entry = KeyEntry {
-                    id,
-                    title: input.title,
-                    project_ids: input.project_ids,
-                    base_url: input.base_url,
-                    docs_url: input.docs_url,
-                    console_url: input.console_url,
-                    purpose: input.purpose,
-                    used_in: input.used_in,
-                    tags: input.tags,
-                    username: input.username,
-                    env_var: input.env_var,
-                    notes: input.notes,
-                    secret: input.secret.unwrap_or_default(),
-                    attachments: Vec::new(),
-                    created_at: now.clone(),
-                    updated_at: now,
-                };
-                u.data.entries.push(entry);
-                Ok(to_meta(u.data.entries.last().unwrap()))
-            }
-        }
+        let entry = u.data.upsert_entry(input, now_iso())?;
+        Ok(to_meta(entry))
     })
 }
 
@@ -520,5 +529,117 @@ mod tests {
         // vault_add_attachment checks metadata length against MAX_ATTACHMENT_SIZE
         // before reading; assert the constant is the documented 10MB.
         assert_eq!(MAX_ATTACHMENT_SIZE, 10 * 1024 * 1024);
+    }
+
+    fn input(id: Option<i64>, title: &str, secret: Option<&str>) -> EntryInput {
+        EntryInput {
+            id,
+            title: title.into(),
+            project_ids: vec![],
+            base_url: String::new(),
+            docs_url: String::new(),
+            console_url: String::new(),
+            purpose: String::new(),
+            used_in: String::new(),
+            tags: vec![],
+            username: String::new(),
+            env_var: String::new(),
+            notes: String::new(),
+            secret: secret.map(String::from),
+        }
+    }
+
+    #[test]
+    fn new_entry_gets_next_id_and_advances_counter() {
+        let mut v = VaultData::empty();
+        let first = v
+            .upsert_entry(input(None, "a", Some("sk-1")), "t0".into())
+            .unwrap()
+            .id;
+        let second = v
+            .upsert_entry(input(None, "b", Some("sk-2")), "t0".into())
+            .unwrap()
+            .id;
+        assert_eq!((first, second), (1, 2));
+        assert_eq!(v.next_id, 3);
+        assert_eq!(v.entries.len(), 2);
+    }
+
+    #[test]
+    fn editing_without_a_secret_keeps_the_stored_one() {
+        let mut v = VaultData::empty();
+        let id = v
+            .upsert_entry(input(None, "orig", Some("sk-secret")), "t0".into())
+            .unwrap()
+            .id;
+
+        v.upsert_entry(input(Some(id), "renamed", None), "t1".into())
+            .unwrap();
+
+        let e = &v.entries[0];
+        assert_eq!(e.title, "renamed");
+        assert_eq!(e.secret, "sk-secret", "secret must survive a metadata edit");
+        assert_eq!(e.updated_at, "t1");
+        assert_eq!(e.created_at, "t0", "created_at must not move on edit");
+    }
+
+    #[test]
+    fn editing_with_a_secret_replaces_it() {
+        let mut v = VaultData::empty();
+        let id = v
+            .upsert_entry(input(None, "a", Some("old")), "t0".into())
+            .unwrap()
+            .id;
+        v.upsert_entry(input(Some(id), "a", Some("new")), "t1".into())
+            .unwrap();
+        assert_eq!(v.entries[0].secret, "new");
+    }
+
+    #[test]
+    fn editing_a_missing_entry_errors() {
+        let mut v = VaultData::empty();
+        assert!(v
+            .upsert_entry(input(Some(42), "ghost", None), "t0".into())
+            .is_err());
+    }
+
+    #[test]
+    fn editing_preserves_attachments() {
+        let mut v = VaultData::empty();
+        let id = v
+            .upsert_entry(input(None, "a", Some("sk")), "t0".into())
+            .unwrap()
+            .id;
+        v.entries[0].attachments.push(Attachment {
+            name: "f.pdf".into(),
+            size: 3,
+            data: "YWJj".into(),
+        });
+
+        v.upsert_entry(input(Some(id), "a2", None), "t1".into())
+            .unwrap();
+
+        assert_eq!(v.entries[0].attachments.len(), 1);
+        assert_eq!(v.entries[0].attachments[0].name, "f.pdf");
+    }
+
+    #[test]
+    fn projection_omits_secret_and_attachment_bytes() {
+        let mut v = VaultData::empty();
+        v.upsert_entry(input(None, "a", Some("sk-hidden")), "t0".into())
+            .unwrap();
+        v.entries[0].attachments.push(Attachment {
+            name: "f.pdf".into(),
+            size: 3,
+            data: "YWJj".into(),
+        });
+
+        let meta = to_meta(&v.entries[0]);
+        let json = serde_json::to_string(&meta).unwrap();
+
+        assert!(!json.contains("sk-hidden"), "secret leaked into projection");
+        assert!(!json.contains("YWJj"), "attachment bytes leaked into projection");
+        assert!(json.contains("f.pdf"), "attachment name should still be listed");
+        assert_eq!(meta.attachments[0].size, 3);
     }
 }

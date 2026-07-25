@@ -1,18 +1,22 @@
 import { useState } from "react";
+import type { Project } from "../../types";
 import { vaultApi } from "../../vault/api";
 import { MASTER_PASSWORD_WARNING, formatBytes, type VaultStatus } from "../../vault/types";
+import { KeyList } from "./KeyList";
 
 export function KeysPage({
   status,
+  projects,
   onStatus,
 }: {
   status: VaultStatus | null;
+  projects: Project[];
   onStatus: (s: VaultStatus) => void;
 }) {
   if (!status) return <div className="empty">加载中…</div>;
   if (status.state === "uninitialized") return <SetupView onCreated={onStatus} />;
   if (status.state === "locked") return <LockView status={status} onUnlocked={onStatus} />;
-  return <div className="empty">库已解锁（列表开发中）</div>;
+  return <KeyList status={status} projects={projects} onStatus={onStatus} />;
 }
 
 function SetupView({ onCreated }: { onCreated: (s: VaultStatus) => void }) {

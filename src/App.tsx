@@ -124,7 +124,7 @@ export default function App() {
       </header>
 
       {keysMode ? (
-        <KeysPage status={vault.status} onStatus={vault.setStatus} />
+        <KeysPage status={vault.status} projects={projects} onStatus={vault.setStatus} />
       ) : (
         <>
           <nav className="filters">
