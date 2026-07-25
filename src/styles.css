@@ -1076,3 +1076,107 @@ input[type="range"] {
 .dot-sep {
   opacity: 0.5;
 }
+
+/* ---------- context menu ---------- */
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.ctx-menu {
+  position: fixed;
+  min-width: 186px;
+  padding: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.3);
+}
+.ctx-slot {
+  position: relative;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: calc(12.5px * var(--fs, 1));
+  text-align: left;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.ctx-item:hover:not(:disabled) {
+  background: var(--bg-input);
+}
+.ctx-item.disabled,
+.ctx-item:disabled {
+  color: var(--text-dim);
+  opacity: 0.45;
+  cursor: default;
+}
+.ctx-item.danger {
+  color: var(--danger);
+}
+.ctx-item.danger:hover:not(:disabled) {
+  background: rgba(229, 72, 77, 0.12);
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+.ctx-arrow {
+  color: var(--text-dim);
+  font-size: calc(10px * var(--fs, 1));
+}
+.ctx-submenu {
+  position: absolute;
+  left: calc(100% - 2px);
+  top: -5px;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.3);
+}
+.ctx-empty {
+  display: block;
+  padding: 7px 10px;
+  color: var(--text-dim);
+  font-size: calc(12px * var(--fs, 1));
+  white-space: nowrap;
+}
+
+/* ---------- toast ---------- */
+.key-toast {
+  position: fixed;
+  bottom: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  padding: 9px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  font-size: calc(12.5px * var(--fs, 1));
+  color: var(--text);
+  animation: toast-in 0.16s ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
