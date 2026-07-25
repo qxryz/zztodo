@@ -4,6 +4,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { FontScale, TAG_META, TagKey, Theme } from "../types";
 import type { useTagColors } from "../useTagColors";
+import { AUTOLOCK_OPTIONS, type useAutoLock } from "../vault/useAutoLock";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 const TAG_KEYS = Object.keys(TAG_META) as TagKey[];
@@ -29,6 +30,7 @@ export function Settings({
   fontScale,
   onFontScaleChange,
   tagColors,
+  autoLock,
   onClose,
 }: {
   theme: Theme;
@@ -36,6 +38,7 @@ export function Settings({
   fontScale: FontScale;
   onFontScaleChange: (f: FontScale) => void;
   tagColors: ReturnType<typeof useTagColors>;
+  autoLock: ReturnType<typeof useAutoLock>;
   onClose: () => void;
 }) {
   const [version, setVersion] = useState("");
@@ -111,6 +114,21 @@ export function Settings({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="settings-row">
+            <span>Key 库自动锁定</span>
+            <select
+              className="settings-select"
+              value={autoLock.minutes}
+              onChange={(e) => autoLock.setMinutes(Number(e.target.value))}
+            >
+              {AUTOLOCK_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="settings-row">

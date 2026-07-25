@@ -15,6 +15,7 @@ import { Settings } from "./components/Settings";
 import { KeysPage } from "./components/keys/KeysPage";
 import { useVault } from "./vault/useVault";
 import { useIdleLock } from "./vault/useIdleLock";
+import { useAutoLock } from "./vault/useAutoLock";
 
 type Filter = "all" | Status | "pinned" | "favorite";
 
@@ -31,11 +32,12 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const vault = useVault();
+  const autoLock = useAutoLock();
   const keysMode = mode === "keys";
 
   // Auto-lock runs app-wide: switching to the projects page keeps the vault
   // unlocked, but the idle timer still ticks.
-  useIdleLock(5, vault.unlocked, vault.lock);
+  useIdleLock(autoLock.minutes, vault.unlocked, vault.lock);
 
   const refresh = async () => {
     setProjects(await api.list());
@@ -206,6 +208,7 @@ export default function App() {
           fontScale={fontScale}
           onFontScaleChange={setFontScale}
           tagColors={tagColors}
+          autoLock={autoLock}
           onClose={() => setSettingsOpen(false)}
         />
       )}
