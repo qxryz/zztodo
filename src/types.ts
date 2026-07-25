@@ -42,6 +42,8 @@ export type FontScale = "sm" | "md" | "lg";
 
 export type Layout = "grid" | "list";
 
+export type AppMode = "projects" | "keys";
+
 export type TagKey = "pinned" | "favorite";
 
 export const TAG_META: Record<TagKey, { label: string; defaultColor: string }> = {

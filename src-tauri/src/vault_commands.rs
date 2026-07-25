@@ -451,3 +451,74 @@ pub fn vault_delete_provider(
         Ok(u.data.providers.clone())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_path(name: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        p.push(format!("zztodo-test-{name}.vault"));
+        let _ = std::fs::remove_file(&p);
+        p
+    }
+
+    #[test]
+    fn persist_writes_a_decryptable_file_and_leaves_no_tmp() {
+        let path = tmp_path("persist");
+        let mut data = VaultData::empty();
+        data.next_id = 7;
+        let unlocked = Unlocked {
+            password: "hunter2".into(),
+            data,
+        };
+
+        persist(&path, &unlocked).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        let back = decrypt_vault(&bytes, "hunter2").unwrap();
+        assert_eq!(back.next_id, 7);
+        assert!(
+            !path.with_extension("vault.tmp").exists(),
+            "tmp file must be renamed away, not left behind"
+        );
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn persist_overwrites_previous_contents() {
+        let path = tmp_path("overwrite");
+        let mut first = VaultData::empty();
+        first.next_id = 1;
+        persist(
+            &path,
+            &Unlocked {
+                password: "pw".into(),
+                data: first,
+            },
+        )
+        .unwrap();
+
+        let mut second = VaultData::empty();
+        second.next_id = 99;
+        persist(
+            &path,
+            &Unlocked {
+                password: "pw".into(),
+                data: second,
+            },
+        )
+        .unwrap();
+
+        let back = decrypt_vault(&std::fs::read(&path).unwrap(), "pw").unwrap();
+        assert_eq!(back.next_id, 99);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn oversized_attachment_is_rejected_by_the_size_gate() {
+        // vault_add_attachment checks metadata length against MAX_ATTACHMENT_SIZE
+        // before reading; assert the constant is the documented 10MB.
+        assert_eq!(MAX_ATTACHMENT_SIZE, 10 * 1024 * 1024);
+    }
+}

@@ -840,3 +840,119 @@ input[type="range"] {
   height: 10px;
   border-radius: 50%;
 }
+
+/* ---------- mode switch (brand dropdown) ---------- */
+.mode-switch {
+  position: relative;
+}
+.mode-trigger {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: 9px;
+  user-select: none;
+  transition: background 0.15s;
+}
+.mode-trigger:hover {
+  background: var(--bg-input);
+}
+.mode-caret {
+  align-self: center;
+  margin-left: 4px;
+  font-size: calc(10px * var(--fs, 1));
+  color: var(--text-dim);
+  transition: transform 0.15s;
+}
+.mode-caret.up {
+  transform: rotate(180deg);
+}
+.mode-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 148px;
+  padding: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+.mode-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: calc(13px * var(--fs, 1));
+  text-align: left;
+  border-radius: 8px;
+}
+.mode-item:hover {
+  background: var(--bg-input);
+}
+.mode-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.mode-check {
+  width: 12px;
+  color: var(--accent);
+}
+
+/* ---------- vault gate (setup / unlock) ---------- */
+.vault-gate {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  overflow-y: auto;
+}
+.vault-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 26px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+.vault-card h2 {
+  font-size: calc(17px * var(--fs, 1));
+  font-weight: 650;
+}
+.vault-warning {
+  padding: 10px 12px;
+  background: rgba(229, 72, 77, 0.1);
+  border: 1px solid rgba(229, 72, 77, 0.32);
+  border-radius: 9px;
+  color: var(--danger);
+  font-size: calc(12.5px * var(--fs, 1));
+  line-height: 1.55;
+}
+.vault-error {
+  color: var(--danger);
+  font-size: calc(12.5px * var(--fs, 1));
+}
+.vault-submit {
+  margin-top: 2px;
+}
+.vault-meta {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: calc(11.5px * var(--fs, 1));
+  line-height: 1.7;
+}
+.vault-path {
+  word-break: break-all;
+  opacity: 0.75;
+}
