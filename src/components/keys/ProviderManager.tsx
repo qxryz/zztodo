@@ -1,8 +1,18 @@
 import { useState } from "react";
 import { vaultApi } from "../../vault/api";
-import { BUILTIN_PROVIDERS, type ProviderTemplate } from "../../vault/types";
+import {
+  BUILTIN_PROVIDERS,
+  type AuthStyle,
+  type ProviderTemplate,
+} from "../../vault/types";
 
-const EMPTY = { name: "", base_url: "", docs_url: "", console_url: "" };
+const EMPTY = {
+  name: "",
+  base_url: "",
+  docs_url: "",
+  console_url: "",
+  auth_style: "openai" as AuthStyle,
+};
 
 /** Second-level modal: manage user provider templates. Builtins are read-only. */
 export function ProviderManager({
@@ -18,7 +28,8 @@ export function ProviderManager({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
-  const set = (k: keyof typeof EMPTY, v: string) => setDraft((d) => ({ ...d, [k]: v }));
+  const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) =>
+    setDraft((d) => ({ ...d, [k]: v }));
 
   const reset = () => {
     setDraft({ ...EMPTY });
@@ -43,6 +54,8 @@ export function ProviderManager({
       base_url: p.base_url,
       docs_url: p.docs_url,
       console_url: p.console_url,
+      // Older vaults may have undefined here; fall back to openai.
+      auth_style: (p.auth_style ?? "openai") as AuthStyle,
     });
   };
 
@@ -90,6 +103,25 @@ export function ProviderManager({
                 value={draft.console_url}
                 onChange={(e) => set("console_url", e.target.value)}
               />
+              <div className="prov-form-row">
+                <span className="prov-hint">鉴权方式</span>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={`segmented-opt ${draft.auth_style === "openai" ? "active" : ""}`}
+                    onClick={() => set("auth_style", "openai")}
+                  >
+                    OpenAI 兼容（Bearer）
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-opt ${draft.auth_style === "anthropic" ? "active" : ""}`}
+                    onClick={() => set("auth_style", "anthropic")}
+                  >
+                    Anthropic 兼容（x-api-key）
+                  </button>
+                </div>
+              </div>
               <div className="prov-form-actions">
                 {editingId !== null && (
                   <button className="btn" onClick={reset}>
@@ -116,11 +148,19 @@ export function ProviderManager({
                     <div className="prov-item-main">
                       <span className="prov-name">{p.name}</span>
                       <span className="prov-url">{p.base_url}</span>
+                      <span className="prov-auth">
+                        {p.auth_style === "anthropic" ? "Anthropic 兼容" : "OpenAI 兼容"}
+                      </span>
                     </div>
                     <button className="mini" onClick={() => edit(p)}>
                       编辑
                     </button>
-                    <button className="mini mini--danger" onClick={() => remove(p.id)}>
+                    <button
+                      className="mini mini--danger"
+                      onClick={() => {
+                        remove(p.id);
+                      }}
+                    >
                       删除
                     </button>
                   </div>
@@ -137,6 +177,9 @@ export function ProviderManager({
                   <div className="prov-item-main">
                     <span className="prov-name">{p.name}</span>
                     <span className="prov-url">{p.base_url}</span>
+                    <span className="prov-auth">
+                      {p.auth_style === "anthropic" ? "Anthropic 兼容" : "OpenAI 兼容"}
+                    </span>
                   </div>
                 </div>
               ))}

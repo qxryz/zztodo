@@ -119,6 +119,11 @@ export function KeyEditor({
       console_url: p.console_url || f.console_url,
       title: f.title || p.name,
     }));
+    // Pull auth style off the provider — this is the convention in LiteLLM /
+    // Open WebUI / Continue.dev: the provider template owns auth style, and
+    // applying it cascades to "拉取模型". The manual override below stays
+    // available for users on ad-hoc URLs that don't match any template.
+    setFetchProtocol(p.auth_style);
     setPickerOpen(false);
   };
 
@@ -429,13 +434,13 @@ export function KeyEditor({
               {modelIdCount > 0 && <span className="field-hint">{modelIdCount}/1</span>}
             </span>
             <div className="model-protocol">
-              <span className="prov-hint">协议</span>
+              <span className="prov-hint">鉴权方式（从供应商模板自动带入，可手动覆盖）</span>
               <div className="segmented">
                 {(
                   [
-                    ["auto", "自动"],
                     ["openai", "OpenAI 兼容"],
                     ["anthropic", "Anthropic 兼容"],
+                    ["auto", "自动"],
                   ] as const
                 ).map(([v, label]) => (
                   <button

@@ -1455,6 +1455,20 @@ input[type="range"] {
   flex-direction: column;
   gap: 7px;
 }
+.prov-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.prov-auth {
+  font-size: calc(10.5px * var(--fs, 1));
+  color: var(--text-dim);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  align-self: flex-start;
+}
 .prov-form-actions {
   display: flex;
   justify-content: flex-end;

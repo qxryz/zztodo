@@ -1,6 +1,6 @@
 use crate::vault::{
-    decrypt_vault, encrypt_vault, Attachment, KeyEntry, ProviderTemplate, VaultData,
-    ERR_BAD_PASSWORD, MAX_ATTACHMENT_SIZE,
+    decrypt_vault, default_auth_style, encrypt_vault, Attachment, KeyEntry, ProviderTemplate,
+    VaultData, ERR_BAD_PASSWORD, MAX_ATTACHMENT_SIZE,
 };
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -148,6 +148,9 @@ pub struct ProviderInput {
     pub base_url: String,
     pub docs_url: String,
     pub console_url: String,
+    /// Required for new templates; default on edit if missing.
+    #[serde(default = "default_auth_style")]
+    pub auth_style: String,
 }
 
 const ERR_LOCKED: &str = "库未解锁";
@@ -494,6 +497,10 @@ pub fn vault_save_provider(
     state: State<VaultState>,
     input: ProviderInput,
 ) -> Result<Vec<ProviderTemplate>, String> {
+    let auth_style = match input.auth_style.as_str() {
+        "openai" | "anthropic" => input.auth_style,
+        other => return Err(format!("不支持的鉴权方式：{other}（应为 openai / anthropic）")),
+    };
     mutate(&state, |u| {
         match input.id {
             Some(id) => {
@@ -507,6 +514,7 @@ pub fn vault_save_provider(
                 p.base_url = input.base_url;
                 p.docs_url = input.docs_url;
                 p.console_url = input.console_url;
+                p.auth_style = auth_style.clone();
             }
             None => {
                 let id = u.data.next_id;
@@ -517,6 +525,7 @@ pub fn vault_save_provider(
                     base_url: input.base_url,
                     docs_url: input.docs_url,
                     console_url: input.console_url,
+                    auth_style: auth_style.clone(),
                 });
             }
         }
@@ -909,6 +918,7 @@ mod tests {
             base_url: "https://relay.example.com/v1".into(),
             docs_url: String::new(),
             console_url: String::new(),
+            auth_style: "openai".into(),
         });
 
         let next_entry_id = v
@@ -1080,6 +1090,48 @@ mod tests {
         assert!(join_models_url("   ").is_err());
         // Not a parseable URL → friendly error.
         assert!(join_models_url("not a url").is_err());
+    }
+
+    #[test]
+    fn old_format_providers_default_auth_style_to_openai() {
+        // Vaults saved before v0.1.10 don't carry `auth_style`. The default
+        // must be "openai" so existing custom templates keep working until
+        // the user reopens ProviderManager and confirms the choice.
+        let legacy = r#"{
+            "version": 1,
+            "next_id": 1,
+            "providers": [
+                {
+                    "id": 1,
+                    "name": "我的中转",
+                    "base_url": "https://relay.example.com/v1",
+                    "docs_url": "",
+                    "console_url": ""
+                }
+            ],
+            "entries": []
+        }"#;
+        let data: VaultData = serde_json::from_str(legacy).unwrap();
+        assert_eq!(data.providers.len(), 1);
+        assert_eq!(data.providers[0].auth_style, "openai");
+    }
+
+    #[test]
+    fn auth_style_roundtrips_through_save_encrypt_reload() {
+        let mut v = VaultData::empty();
+        v.next_id = 2;
+        v.providers.push(ProviderTemplate {
+            id: 1,
+            name: "Anthropic Custom".into(),
+            base_url: "https://api.example.com/anthropic".into(),
+            docs_url: String::new(),
+            console_url: String::new(),
+            auth_style: "anthropic".into(),
+        });
+
+        let bytes = encrypt_vault(&v, "pw").unwrap();
+        let back = decrypt_vault(&bytes, "pw").unwrap();
+        assert_eq!(back.providers[0].auth_style, "anthropic");
     }
 
     #[test]

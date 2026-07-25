@@ -55,6 +55,15 @@ pub struct ProviderTemplate {
     pub base_url: String,
     pub docs_url: String,
     pub console_url: String,
+    /// Added in v0.1.10. Older vaults don't have it, so we default to
+    /// "openai" — the vast majority of LLM API providers fall in the
+    /// OpenAI-compatible bucket; Anthropic-style auth is an opt-in.
+    #[serde(default = "default_auth_style")]
+    pub auth_style: String,
+}
+
+pub(crate) fn default_auth_style() -> String {
+    "openai".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
