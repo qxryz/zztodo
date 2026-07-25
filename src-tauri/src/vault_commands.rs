@@ -540,11 +540,23 @@ fn looks_like_anthropic(base_url: &str) -> bool {
 }
 
 fn join_models_url(base_url: &str) -> Result<String, String> {
-    let trimmed = base_url.trim().trim_end_matches('/');
+    let trimmed = base_url.trim();
     if trimmed.is_empty() {
         return Err("baseurl 不能为空".into());
     }
-    Ok(format!("{trimmed}/models"))
+    let mut url = url::Url::parse(trimmed)
+        .map_err(|e| format!("baseurl 无法解析（{trimmed}）：{e}"))?;
+    let mut segs: Vec<String> = url
+        .path_segments()
+        .map(|s| s.filter(|p| !p.is_empty()).map(String::from).collect())
+        .unwrap_or_default();
+    segs.push("models".to_string());
+    url.set_path(&format!("/{}", segs.join("/")));
+    // /models should be called bare: any pre-existing query/fragment in the
+    // baseurl would otherwise leak into the request URL.
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url.to_string())
 }
 
 /// Fetch available model IDs from a provider's `/models` endpoint.
@@ -565,35 +577,58 @@ pub async fn vault_fetch_models(
     }
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent(concat!("zztodo/", env!("CARGO_PKG_VERSION")))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("构造 HTTP 客户端失败：{e}"))?;
 
-    let req = if looks_like_anthropic(&base_url) {
-        client
-            .get(&url)
+    let mut req = client.get(&url);
+    if looks_like_anthropic(&base_url) {
+        req = req
             .header("x-api-key", &key)
-            .header("anthropic-version", "2023-06-01")
+            .header("anthropic-version", "2023-06-01");
     } else {
-        client.get(&url).bearer_auth(&key)
-    };
+        req = req.bearer_auth(&key);
+    }
+    req = req.header("Accept", "application/json");
 
-    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let resp = req.send().await.map_err(|e| format!("网络错误：{url}：{e}"))?;
     let status = resp.status();
     if !status.is_success() {
-        return Err(format!("拉取模型失败：HTTP {status}"));
+        let body = resp.text().await.unwrap_or_default();
+        let snippet: String = body.chars().take(200).collect();
+        let snippet = snippet.replace('\n', " ");
+        return Err(format!(
+            "拉取模型失败：{url} HTTP {status} {snippet}"
+        ));
     }
 
-    let val: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    let models = val
+    let val: serde_json::Value = resp.json().await.map_err(|e| {
+        format!("返回非 JSON（可能是 CDN/网关拦截页）：{url}：{e}")
+    })?;
+
+    let data = val
         .get("data")
         .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+        .ok_or_else(|| {
+            let keys = val
+                .as_object()
+                .map(|o| {
+                    let mut ks: Vec<&String> = o.keys().collect();
+                    ks.sort();
+                    ks.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",")
+                })
+                .unwrap_or_else(|| "(非 JSON 对象)".to_string());
+            format!(
+                "返回结构里没有 data 数组（看到的字段：{keys}）。{url}"
+            )
+        })?;
+
+    let models: Vec<String> = data
+        .iter()
+        .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
+        .collect();
 
     Ok(models)
 }
@@ -962,16 +997,51 @@ mod tests {
 
     #[test]
     fn models_endpoint_strips_trailing_slash_and_appends_models() {
+        // Typical cases — including the project's builtin providers.
+        for (input, want) in [
+            ("https://api.openai.com/v1", "https://api.openai.com/v1/models"),
+            (
+                "https://api.openai.com/v1/",
+                "https://api.openai.com/v1/models",
+            ),
+            ("https://api.openai.com", "https://api.openai.com/models"),
+            (
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+            ),
+            (
+                "https://ark.cn-beijing.volces.com/api/v3",
+                "https://ark.cn-beijing.volces.com/api/v3/models",
+            ),
+            (
+                "http://localhost:11434/v1",
+                "http://localhost:11434/v1/models",
+            ),
+        ] {
+            assert_eq!(join_models_url(input).unwrap(), want, "{input}");
+        }
+    }
+
+    #[test]
+    fn models_endpoint_drops_query_and_fragment() {
+        // Query/fragment on the baseurl must NOT bleed into /models — most
+        // providers won't recognise `…/models?key=foo` as the right endpoint.
         assert_eq!(
-            join_models_url("https://api.openai.com/v1").unwrap(),
+            join_models_url("https://api.openai.com/v1?foo=bar").unwrap(),
             "https://api.openai.com/v1/models"
         );
         assert_eq!(
-            join_models_url("https://api.openai.com/v1/").unwrap(),
+            join_models_url("https://api.openai.com/v1#frag").unwrap(),
             "https://api.openai.com/v1/models"
         );
+    }
+
+    #[test]
+    fn models_endpoint_rejects_empty_and_invalid() {
         assert!(join_models_url("").is_err());
         assert!(join_models_url("   ").is_err());
+        // Not a parseable URL → friendly error.
+        assert!(join_models_url("not a url").is_err());
     }
 
     #[test]
