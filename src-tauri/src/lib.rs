@@ -2,12 +2,14 @@ mod db;
 mod models;
 mod scan;
 mod vault;
+mod vault_commands;
 
 use db::Db;
 use models::{FolderScan, Project, ProjectInput};
 use rusqlite::Connection;
 use std::sync::Mutex;
 use tauri::{Manager, State};
+use vault_commands::VaultState;
 
 fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
@@ -50,12 +52,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&dir).ok();
             let conn = Connection::open(dir.join("zztodo.db")).expect("open db");
             db::init(&conn).expect("init db");
             app.manage(Db(Mutex::new(conn)));
+            app.manage(VaultState::new(dir.join("keys.vault")));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,7 +67,22 @@ pub fn run() {
             create_project,
             update_project,
             delete_project,
-            scan_folder
+            scan_folder,
+            vault_commands::vault_status,
+            vault_commands::vault_create,
+            vault_commands::vault_unlock,
+            vault_commands::vault_lock,
+            vault_commands::vault_change_password,
+            vault_commands::vault_list_entries,
+            vault_commands::vault_get_secret,
+            vault_commands::vault_save_entry,
+            vault_commands::vault_delete_entry,
+            vault_commands::vault_add_attachment,
+            vault_commands::vault_save_attachment_to,
+            vault_commands::vault_remove_attachment,
+            vault_commands::vault_list_providers,
+            vault_commands::vault_save_provider,
+            vault_commands::vault_delete_provider
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

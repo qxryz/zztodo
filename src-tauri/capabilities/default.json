@@ -9,6 +9,9 @@
     "dialog:default",
     "shell:allow-open",
     "updater:default",
-    "process:default"
+    "process:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "dialog:allow-save"
   ]
 }
