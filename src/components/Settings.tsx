@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { getVersion } from "@tauri-apps/api/app";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -263,8 +265,106 @@ function MarkerPane({
 }) {
   const [resetMsg, setResetMsg] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
-  const dragFrom = useRef<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  /**
+   * Pointer-based reorder (HTML5 DnD is flaky in WKWebView and has no live
+   * feedback). Local draft order updates every frame while dragging; prefs
+   * only commit on pointerup. A fixed-position clone follows the cursor.
+   */
+  const chipRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const draftRef = useRef<string[] | null>(null);
+  const drag = useRef<{
+    cur: number;
+    color: string;
+    offX: number;
+    offY: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const [float, setFloat] = useState<{
+    x: number;
+    y: number;
+    color: string;
+    cur: number;
+  } | null>(null);
+
+  const colors = draft ?? marker.colors;
+
+  const insertionIndex = (x: number, y: number): number => {
+    const chips = chipRefs.current;
+    for (let j = 0; j < chips.length; j++) {
+      const r = chips[j]?.getBoundingClientRect();
+      if (!r) continue;
+      if (y < r.top) return j;
+      if (y < r.bottom && x < r.left + r.width / 2) return j;
+    }
+    return chips.length;
+  };
+
+  const onChipPointerDown = (e: ReactPointerEvent<HTMLSpanElement>, i: number) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    const startColors = [...marker.colors];
+    draftRef.current = startColors;
+    drag.current = {
+      cur: i,
+      color: startColors[i],
+      offX: e.clientX - r.left,
+      offY: e.clientY - r.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      active: false,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      if (!d.active) {
+        if (Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 4) return;
+        d.active = true;
+        setDraft([...startColors]);
+      }
+      const order = draftRef.current ?? startColors;
+      const to = insertionIndex(ev.clientX, ev.clientY);
+      const final = Math.max(0, Math.min(MARKER_COLOR_COUNT - 1, to > d.cur ? to - 1 : to));
+      if (final !== d.cur) {
+        const next = [...order];
+        const [c] = next.splice(d.cur, 1);
+        next.splice(final, 0, c);
+        d.cur = final;
+        draftRef.current = next;
+        setDraft(next);
+      }
+      setFloat({
+        x: ev.clientX - d.offX,
+        y: ev.clientY - d.offY,
+        color: d.color,
+        cur: d.cur,
+      });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const d = drag.current;
+      const finalOrder = draftRef.current;
+      drag.current = null;
+      draftRef.current = null;
+      setFloat(null);
+      setDraft(null);
+      if (d?.active && finalOrder) {
+        marker.setColorOrder(finalOrder);
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
 
   const reset = async () => {
     if (resetBusy) return;
@@ -282,12 +382,8 @@ function MarkerPane({
     }
   };
 
-  const drop = (to: number) => {
-    const from = dragFrom.current;
-    dragFrom.current = null;
-    setDragOver(null);
-    if (from !== null && from !== to) marker.moveColor(from, to);
-  };
+  const dragging = float !== null;
+  const dragCur = float?.cur ?? -1;
 
   return (
     <>
@@ -353,14 +449,15 @@ function MarkerPane({
           <div>
             <h3 className="settings-group-title">颜色</h3>
             <p className="settings-group-desc">
-              白色固定在最前（原始状态），拖动调整其余 {MARKER_COLOR_COUNT} 种浅色的顺序。
+              白色固定在最前（原始状态），按住拖动调整其余 {MARKER_COLOR_COUNT}{" "}
+              种浅色的顺序。
             </p>
           </div>
-          <button className="mini" onClick={marker.resetColors}>
+          <button className="mini" onClick={marker.resetColors} disabled={dragging}>
             恢复默认
           </button>
         </div>
-        <div className="marker-colors">
+        <div className={`marker-colors ${dragging ? "is-dragging" : ""}`}>
           <span
             className="marker-color marker-color--white"
             title="白色（原始状态，固定在最前）"
@@ -368,30 +465,15 @@ function MarkerPane({
             <span className="marker-color-dot marker-color-dot--white" />
             <span className="marker-color-name">白</span>
           </span>
-          {marker.colors.map((c, i) => (
+          {colors.map((c, i) => (
             <span
               key={c}
-              className={`marker-color ${dragOver === i ? "drag-over" : ""}`}
-              draggable
+              ref={(el) => {
+                chipRefs.current[i] = el;
+              }}
+              className={`marker-color ${dragCur === i ? "is-src" : ""}`}
               title={`拖动调整顺序（第 ${i + 1} 位）`}
-              onDragStart={(e) => {
-                dragFrom.current = i;
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDragOver(i);
-              }}
-              onDragLeave={() => setDragOver((v) => (v === i ? null : v))}
-              onDrop={(e) => {
-                e.preventDefault();
-                drop(i);
-              }}
-              onDragEnd={() => {
-                dragFrom.current = null;
-                setDragOver(null);
-              }}
+              onPointerDown={(e) => onChipPointerDown(e, i)}
             >
               <span className="marker-color-dot" style={{ background: c }} />
               <span className="marker-color-name">{i + 1}</span>
@@ -399,6 +481,19 @@ function MarkerPane({
           ))}
         </div>
       </div>
+
+      {float &&
+        createPortal(
+          <span
+            className="marker-color marker-color--float"
+            style={{ left: float.x, top: float.y }}
+            aria-hidden
+          >
+            <span className="marker-color-dot" style={{ background: float.color }} />
+            <span className="marker-color-name">↕</span>
+          </span>,
+          document.body,
+        )}
     </>
   );
 }

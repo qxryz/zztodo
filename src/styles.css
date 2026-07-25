@@ -900,6 +900,10 @@ input[type="range"] {
   gap: 8px;
   flex-wrap: wrap;
   width: 100%;
+  user-select: none;
+}
+.marker-colors.is-dragging {
+  cursor: grabbing;
 }
 .marker-color {
   display: flex;
@@ -911,24 +915,47 @@ input[type="range"] {
   border: 1.5px solid var(--border);
   border-radius: 10px;
   cursor: grab;
-  transition: border-color 0.15s, transform 0.15s;
+  touch-action: none;
+  transition: border-color 0.12s ease, transform 0.12s ease, opacity 0.12s ease,
+    box-shadow 0.12s ease;
 }
-.marker-color:active {
+.marker-color:not(.marker-color--white):hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.marker-color:not(.marker-color--white):active {
   cursor: grabbing;
 }
-.marker-color.drag-over {
-  border-color: var(--accent);
-  transform: translateY(-2px);
+.marker-color.is-src {
+  opacity: 0.35;
+  border-style: dashed;
+  transform: scale(0.96);
+  pointer-events: none;
 }
 .marker-color--white {
   cursor: default;
   border-style: dashed;
+  touch-action: auto;
+}
+.marker-color--float {
+  position: fixed;
+  z-index: 200;
+  margin: 0;
+  pointer-events: none;
+  cursor: grabbing;
+  opacity: 1;
+  transform: scale(1.08) rotate(-2deg);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  border-color: var(--accent);
+  background: var(--bg-card);
+  transition: none;
 }
 .marker-color-dot {
   width: 22px;
   height: 22px;
   border-radius: 50%;
   border: 1px solid var(--border-strong);
+  flex-shrink: 0;
 }
 .marker-color-dot--white {
   background: #ffffff;

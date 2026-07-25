@@ -144,6 +144,19 @@ export function useStickyMarker() {
     });
   }, []);
 
+  /** Replace the whole 7-color sequence (used by live drag commit). */
+  const setColorOrder = useCallback((next: string[]) => {
+    setPrefs((p) => {
+      if (next.length !== MARKER_COLOR_COUNT) return p;
+      const colors = next.map((c, i) =>
+        typeof c === "string" && HEX_RE.test(c) ? c.toLowerCase() : p.colors[i],
+      );
+      const activeHex = p.activeIndex === 0 ? null : p.colors[p.activeIndex - 1];
+      const idx = activeHex === null ? -1 : colors.indexOf(activeHex);
+      return { ...p, colors, activeIndex: idx < 0 ? 0 : idx + 1 };
+    });
+  }, []);
+
   const resetColors = useCallback(
     () =>
       setPrefs((p) => ({
@@ -164,6 +177,7 @@ export function useStickyMarker() {
     setEnabled,
     setClickMode,
     moveColor,
+    setColorOrder,
     resetColors,
   };
 }
