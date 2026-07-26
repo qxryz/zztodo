@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { api } from "../api";
@@ -1032,35 +1033,49 @@ function AboutPane() {
   };
 
   return (
-    <div className="settings-group">
-      <h3 className="settings-group-title">版本</h3>
-      <div className="update-check">
-        <span className="version-num">v{version}</span>
+    <>
+      <div className="settings-group">
+        <h3 className="settings-group-title">作者</h3>
         <button
-          className="btn"
-          onClick={checkForUpdates}
-          disabled={update.kind === "checking"}
+          className="about-author"
+          type="button"
+          onClick={() => openUrl("https://github.com/qxryz/zztodo").catch(() => {})}
+          title="打开 GitHub 仓库"
         >
-          {update.kind === "checking" ? "检查中…" : "检查更新"}
+          作者：qxryz（自用，free）
         </button>
       </div>
 
-      {update.kind === "latest" && <p className="update-hint ok">已是最新版本</p>}
-      {update.kind === "error" && (
-        <p className="update-hint err">检查失败，请稍后重试</p>
-      )}
-      {update.kind === "available" && (
-        <p className="update-hint available">
-          发现新版本 v{update.version}，
-          <button className="link-btn" onClick={() => installUpdate(update.update)}>
-            立即更新
+      <div className="settings-group">
+        <h3 className="settings-group-title">版本</h3>
+        <div className="update-check">
+          <span className="version-num">v{version}</span>
+          <button
+            className="btn"
+            onClick={checkForUpdates}
+            disabled={update.kind === "checking"}
+          >
+            {update.kind === "checking" ? "检查中…" : "检查更新"}
           </button>
-        </p>
-      )}
-      {update.kind === "downloading" && (
-        <p className="update-hint available">下载中… {update.progress}%</p>
-      )}
-      {update.kind === "ready" && <p className="update-hint ok">安装完成，正在重启…</p>}
-    </div>
+        </div>
+
+        {update.kind === "latest" && <p className="update-hint ok">已是最新版本</p>}
+        {update.kind === "error" && (
+          <p className="update-hint err">检查失败，请稍后重试</p>
+        )}
+        {update.kind === "available" && (
+          <p className="update-hint available">
+            发现新版本 v{update.version}，
+            <button className="link-btn" onClick={() => installUpdate(update.update)}>
+              立即更新
+            </button>
+          </p>
+        )}
+        {update.kind === "downloading" && (
+          <p className="update-hint available">下载中… {update.progress}%</p>
+        )}
+        {update.kind === "ready" && <p className="update-hint ok">安装完成，正在重启…</p>}
+      </div>
+    </>
   );
 }

@@ -95,7 +95,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar" data-tauri-drag-region>
+      <header className="topbar" data-tauri-drag-region="deep">
         <ModeSwitch mode={mode} onChange={setMode} />
         {!keysMode && (
           <div className="search">

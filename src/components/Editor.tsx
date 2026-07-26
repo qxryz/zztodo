@@ -58,8 +58,8 @@ export function Editor({
     set("tech_stack", form.tech_stack.filter((x) => x !== t));
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay">
+      <div className="modal">
         <header className="modal-head">
           <h2>{project ? "编辑项目" : "新建项目"}</h2>
           <button className="icon-btn" onClick={onClose}>

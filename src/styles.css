@@ -1061,6 +1061,21 @@ input[type="range"] {
   color: var(--accent);
   box-shadow: var(--shadow);
 }
+.about-author {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: calc(13.5px * var(--fs, 1));
+  font-weight: 600;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.about-author:hover {
+  opacity: 0.85;
+}
 .update-check {
   display: flex;
   align-items: center;

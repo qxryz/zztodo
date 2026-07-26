@@ -150,13 +150,11 @@ pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .clone();
 
-    // Tear down any previous icon first.
-    if let Some(existing) = app.tray_by_id(TRAY_ID) {
-        let _ = existing.set_visible(false);
-        let _ = app.remove_tray_by_id(TRAY_ID);
-    }
-
     if !cfg.enabled {
+        if let Some(existing) = app.tray_by_id(TRAY_ID) {
+            let _ = existing.set_visible(false);
+            let _ = app.remove_tray_by_id(TRAY_ID);
+        }
         return Ok(());
     }
 
@@ -167,6 +165,16 @@ pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
     };
 
     let menu = build_menu(app, &cfg, &projects)?;
+
+    // Prefer in-place menu swap — tearing down the tray icon from inside a
+    // menu-event callback crashes / dismisses the status item on macOS.
+    if let Some(existing) = app.tray_by_id(TRAY_ID) {
+        existing
+            .set_menu(Some(menu))
+            .map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
     let icon = tray_icon(app)?;
 
     let builder = TrayIconBuilder::with_id(TRAY_ID)
@@ -186,6 +194,21 @@ pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
 
     builder.build(app).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Rebuild after the current menu-event stack unwinds. Calling `rebuild_tray`
+/// (or any tray teardown) synchronously from `on_menu_event` is unsafe on macOS.
+fn schedule_rebuild(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        let app2 = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            if let Err(e) = rebuild_tray(&app2) {
+                eprintln!("[tray] deferred rebuild failed: {e}");
+            }
+        });
+    });
 }
 
 fn tray_icon(_app: &AppHandle) -> Result<tauri::image::Image<'static>, String> {
@@ -435,8 +458,9 @@ fn handle_menu(app: &AppHandle, id: &str) -> Result<(), String> {
                 }
             }
             let _ = app.emit("tray://vault-locked", ());
-            // Refresh label (锁定 → 已锁定).
-            let _ = rebuild_tray(app);
+            // Must defer: rebuilding/swapping the menu from inside on_menu_event
+            // tears down the status item and can crash the process on macOS.
+            schedule_rebuild(app);
         }
         "random_active_folder" => {
             let projects = {

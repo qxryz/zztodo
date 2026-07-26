@@ -281,8 +281,8 @@ export function KeyEditor({
   const modelIdCount = form.model_id.trim() ? 1 : 0;
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal key-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay">
+      <div className="modal key-modal">
         <header className="modal-head">
           <h2>{entry ? "编辑 Key" : "新建 Key"}</h2>
           <div className="modal-head-actions" ref={pickerRef}>
