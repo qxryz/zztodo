@@ -9,7 +9,7 @@ use db::Db;
 use models::{FolderScan, Project, ProjectInput};
 use rusqlite::Connection;
 use std::sync::Mutex;
-use tauri::{Manager, State};
+use tauri::{Manager, RunEvent, State, WindowEvent};
 use vault_commands::VaultState;
 
 fn err<E: std::fmt::Display>(e: E) -> String {
@@ -85,6 +85,17 @@ pub fn run() {
             }
             Ok(())
         })
+        // Red-close / Cmd+W should tuck the window away and leave the menu-bar
+        // icon running. Real quit only happens via the tray「退出」item (or when
+        // the tray itself is disabled).
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if tray::is_enabled(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             list_projects,
             create_project,
@@ -113,6 +124,15 @@ pub fn run() {
             vault_commands::vault_delete_provider,
             vault_commands::vault_fetch_models
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Closing the last window normally requests process exit; keep
+            // living for the tray unless this was an explicit app.exit(code).
+            if let RunEvent::ExitRequested { api, code, .. } = &event {
+                if code.is_none() && tray::is_enabled(app_handle) {
+                    api.prevent_exit();
+                }
+            }
+        });
 }

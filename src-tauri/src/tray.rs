@@ -134,6 +134,14 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
     rebuild_tray(app)
 }
 
+/// Whether the menu-bar icon is currently supposed to be shown. Used by the
+/// window-close handler to decide between "hide to tray" and "really quit".
+pub fn is_enabled(app: &AppHandle) -> bool {
+    app.try_state::<TrayState>()
+        .and_then(|s| s.config.lock().ok().map(|c| c.enabled))
+        .unwrap_or(false)
+}
+
 pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
     let tray_state = app.state::<TrayState>();
     let cfg = tray_state

@@ -344,7 +344,7 @@ function TrayPane({ projects }: { projects: Project[] }) {
           <div>
             <h3 className="settings-group-title">显示菜单栏图标</h3>
             <p className="settings-group-desc">
-              在 macOS 屏幕顶部状态栏显示 zztodo，左键点开快捷菜单。
+              在 macOS 屏幕顶部状态栏显示 zztodo，左键点开快捷菜单。关闭窗口只会隐藏到菜单栏，点「退出」才真正结束进程。
             </p>
           </div>
           <button
