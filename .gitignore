@@ -16,3 +16,7 @@ src-tauri/updater.key
 
 # superpowers dev specs (local planning docs, not for remote)
 docs/superpowers/
+
+# local agent instructions (do not push)
+AGENTS.md
+AGENT.md
