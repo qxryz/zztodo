@@ -230,6 +230,7 @@ export default function App() {
           marker={marker}
           vaultUnlocked={vault.unlocked}
           onEntriesReset={() => setKeysVersion((v) => v + 1)}
+          projects={projects}
           onClose={() => setSettingsOpen(false)}
         />
       )}

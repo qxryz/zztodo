@@ -4,13 +4,29 @@ import { createPortal } from "react-dom";
 import { getVersion } from "@tauri-apps/api/app";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { FontScale, TAG_META, THEME_META, TagKey, Theme } from "../types";
+import { api } from "../api";
+import {
+  FontScale,
+  Project,
+  TAG_META,
+  THEME_META,
+  TagKey,
+  Theme,
+} from "../types";
 import type { useTagColors } from "../useTagColors";
 import {
   MARKER_CLICK_MODES,
   MARKER_COLOR_COUNT,
   type StickyMarker,
 } from "../useStickyMarker";
+import {
+  defaultTrayConfig,
+  emptyDraft,
+  TRAY_EXTRA_META,
+  type DraftKey,
+  type TrayConfig,
+  type TrayExtra,
+} from "../trayTypes";
 import { vaultApi } from "../vault/api";
 import { AUTOLOCK_OPTIONS, type useAutoLock } from "../vault/useAutoLock";
 
@@ -23,10 +39,11 @@ const FONT_OPTIONS: { value: FontScale; label: string }[] = [
   { value: "lg", label: "大" },
 ];
 
-type Section = "appearance" | "vault" | "marker" | "colors" | "about";
+type Section = "appearance" | "tray" | "vault" | "marker" | "colors" | "about";
 
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: "appearance", label: "外观", icon: "🎨" },
+  { key: "tray", label: "快捷栏", icon: "📌" },
   { key: "vault", label: "Key 库", icon: "🔑" },
   { key: "marker", label: "粘性标记", icon: "🏷" },
   { key: "colors", label: "配色", icon: "🌈" },
@@ -55,6 +72,7 @@ export function Settings({
   marker,
   vaultUnlocked,
   onEntriesReset,
+  projects,
   onClose,
 }: {
   theme: Theme;
@@ -71,6 +89,7 @@ export function Settings({
   vaultUnlocked: boolean;
   /** Notify App that entry tints changed so the key list refreshes. */
   onEntriesReset: () => void;
+  projects: Project[];
   onClose: () => void;
 }) {
   const [section, setSection] = useState<Section>("appearance");
@@ -108,6 +127,7 @@ export function Settings({
                 onFontScaleChange={onFontScaleChange}
               />
             )}
+            {section === "tray" && <TrayPane projects={projects} />}
             {section === "vault" && (
               <VaultPane
                 autoLock={autoLock}
@@ -201,6 +221,413 @@ function AppearancePane({
           ))}
         </div>
       </div>
+    </>
+  );
+}
+
+/* ---------- 快捷栏（菜单栏） ---------- */
+
+function TrayPane({ projects }: { projects: Project[] }) {
+  const [cfg, setCfg] = useState<TrayConfig | null>(null);
+  const [error, setError] = useState("");
+  const [savedFlash, setSavedFlash] = useState("");
+  const [editingDraft, setEditingDraft] = useState<{
+    index: number;
+    draft: DraftKey;
+  } | null>(null);
+
+  const pinnedProjects = projects.filter((p) => p.pinned);
+
+  useEffect(() => {
+    api
+      .trayGetConfig()
+      .then(setCfg)
+      .catch((e) => {
+        setError(String(e));
+        setCfg(defaultTrayConfig());
+      });
+  }, []);
+
+  const persist = async (next: TrayConfig) => {
+    setCfg(next);
+    setError("");
+    try {
+      setCfg(await api.traySetConfig(next));
+      setSavedFlash("已应用到菜单栏");
+      setTimeout(() => setSavedFlash(""), 1600);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  if (!cfg) {
+    return <p className="settings-group-desc">加载中…</p>;
+  }
+
+  const addExtra = (kind: TrayExtra["kind"]) => {
+    let extra: TrayExtra;
+    switch (kind) {
+      case "pinned_project": {
+        const first = pinnedProjects[0];
+        if (!first) {
+          setError("还没有标记为「重点开发」的项目，先去项目页钉一个");
+          return;
+        }
+        extra = { kind: "pinned_project", project_id: first.id };
+        break;
+      }
+      case "draft_key":
+        extra = { kind: "draft_key", draft: emptyDraft() };
+        break;
+      case "lock_vault":
+        extra = { kind: "lock_vault" };
+        break;
+      case "status_line":
+        extra = { kind: "status_line" };
+        break;
+      case "random_active_folder":
+        extra = { kind: "random_active_folder" };
+        break;
+    }
+    // Avoid duplicate of singleton kinds.
+    if (
+      (kind === "lock_vault" ||
+        kind === "status_line" ||
+        kind === "random_active_folder") &&
+      cfg.extras.some((e) => e.kind === kind)
+    ) {
+      setError("该项已在列表中");
+      return;
+    }
+    void persist({ ...cfg, extras: [...cfg.extras, extra] });
+    if (kind === "draft_key" && extra.kind === "draft_key") {
+      setEditingDraft({ index: cfg.extras.length, draft: extra.draft });
+    }
+  };
+
+  const removeAt = (i: number) => {
+    void persist({ ...cfg, extras: cfg.extras.filter((_, idx) => idx !== i) });
+  };
+
+  const moveExtra = (from: number, to: number) => {
+    if (to < 0 || to >= cfg.extras.length) return;
+    const extras = [...cfg.extras];
+    const [x] = extras.splice(from, 1);
+    extras.splice(to, 0, x);
+    void persist({ ...cfg, extras });
+  };
+
+  const setPinnedId = (i: number, projectId: number) => {
+    const extras = cfg.extras.map((e, idx) =>
+      idx === i && e.kind === "pinned_project"
+        ? { ...e, project_id: projectId }
+        : e,
+    );
+    void persist({ ...cfg, extras });
+  };
+
+  const saveDraft = () => {
+    if (!editingDraft) return;
+    const extras = cfg.extras.map((e, idx) =>
+      idx === editingDraft.index && e.kind === "draft_key"
+        ? { kind: "draft_key" as const, draft: editingDraft.draft }
+        : e,
+    );
+    void persist({ ...cfg, extras });
+    setEditingDraft(null);
+  };
+
+  return (
+    <>
+      <div className="settings-group">
+        <div className="settings-group-head">
+          <div>
+            <h3 className="settings-group-title">显示菜单栏图标</h3>
+            <p className="settings-group-desc">
+              在 macOS 屏幕顶部状态栏显示 zztodo，左键点开快捷菜单。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={cfg.enabled}
+            className={`switch ${cfg.enabled ? "on" : ""}`}
+            onClick={() => persist({ ...cfg, enabled: !cfg.enabled })}
+          >
+            <span className="switch-knob" />
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-group">
+        <h3 className="settings-group-title">固定菜单（不可移除）</h3>
+        <p className="settings-group-desc">
+          始终出现在菜单顶部，二级列出全部项目名。
+        </p>
+        <div className="tray-fixed-list">
+          <div className="tray-fixed-item">
+            <span className="tray-fixed-badge">网站</span>
+            <span className="settings-inline-hint">有线上地址的项目 → 浏览器打开</span>
+          </div>
+          <div className="tray-fixed-item">
+            <span className="tray-fixed-badge">文件夹</span>
+            <span className="settings-inline-hint">有本地路径的项目 → Finder 打开</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-group">
+        <div className="settings-group-head">
+          <div>
+            <h3 className="settings-group-title">自定义条目</h3>
+            <p className="settings-group-desc">
+              插在「网站 / 文件夹」与「显示 zztodo / 退出」之间。可上下调整顺序。
+            </p>
+          </div>
+        </div>
+
+        {cfg.extras.length === 0 ? (
+          <p className="settings-inline-hint">还没有自定义条目，从下方添加</p>
+        ) : (
+          <div className="tray-extra-list">
+            {cfg.extras.map((extra, i) => (
+              <div key={i} className="tray-extra-row">
+                <div className="tray-extra-main">
+                  <span className="tray-extra-kind">
+                    {TRAY_EXTRA_META.find((m) => m.kind === extra.kind)?.label ??
+                      extra.kind}
+                  </span>
+                  {extra.kind === "pinned_project" && (
+                    <select
+                      className="settings-select tray-extra-select"
+                      value={extra.project_id}
+                      onChange={(e) => setPinnedId(i, Number(e.target.value))}
+                    >
+                      {pinnedProjects.length === 0 && (
+                        <option value={extra.project_id}>（无重点项目）</option>
+                      )}
+                      {pinnedProjects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                      {/* Keep current selection visible even if unpinned later */}
+                      {!pinnedProjects.some((p) => p.id === extra.project_id) &&
+                        (() => {
+                          const orphan = projects.find((p) => p.id === extra.project_id);
+                          return orphan ? (
+                            <option value={orphan.id}>{orphan.name}（已取消重点）</option>
+                          ) : (
+                            <option value={extra.project_id}>项目已删除</option>
+                          );
+                        })()}
+                    </select>
+                  )}
+                  {extra.kind === "draft_key" && (
+                    <button
+                      type="button"
+                      className="mini"
+                      onClick={() =>
+                        setEditingDraft({ index: i, draft: { ...extra.draft } })
+                      }
+                    >
+                      编辑「{extra.draft.name || "未命名"}」
+                    </button>
+                  )}
+                  {extra.kind !== "pinned_project" && extra.kind !== "draft_key" && (
+                    <span className="settings-inline-hint">
+                      {TRAY_EXTRA_META.find((m) => m.kind === extra.kind)?.desc}
+                    </span>
+                  )}
+                </div>
+                <div className="tray-extra-actions">
+                  <button
+                    type="button"
+                    className="mini"
+                    disabled={i === 0}
+                    onClick={() => moveExtra(i, i - 1)}
+                    title="上移"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="mini"
+                    disabled={i === cfg.extras.length - 1}
+                    onClick={() => moveExtra(i, i + 1)}
+                    title="下移"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="mini mini--danger"
+                    onClick={() => removeAt(i)}
+                  >
+                    移除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="tray-add-row">
+          {TRAY_EXTRA_META.map((m) => (
+            <button
+              key={m.kind}
+              type="button"
+              className="btn"
+              title={m.desc}
+              onClick={() => addExtra(m.kind)}
+            >
+              ＋ {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="settings-group">
+        <h3 className="settings-group-title">菜单预览结构</h3>
+        <pre className="tray-preview">
+{`网站  ▸  （全部有 URL 的项目）
+文件夹  ▸  （全部有路径的项目）
+────────────────
+${cfg.extras
+  .map((e) => {
+    if (e.kind === "pinned_project") {
+      const n = projects.find((p) => p.id === e.project_id)?.name ?? "?";
+      return `★ ${n}  ▸  仓库 / 网站 / 文件夹`;
+    }
+    if (e.kind === "draft_key") {
+      return `🔑 ${e.draft.name || "草稿"}  ▸  复制 key / baseurl / 模型 / 全家桶 / 打开站`;
+    }
+    if (e.kind === "lock_vault") return `锁定 Key 库`;
+    if (e.kind === "status_line") return `进行中 N · 重点 M · 共 K`;
+    return `🎲 随机打开进行中项目`;
+  })
+  .join("\n")}
+────────────────
+显示 zztodo
+退出`}
+        </pre>
+      </div>
+
+      {error && <p className="update-hint err">{error}</p>}
+      {savedFlash && <p className="settings-inline-hint ok">{savedFlash}</p>}
+
+      {editingDraft && (
+        <div className="overlay overlay--stacked" onClick={() => setEditingDraft(null)}>
+          <div
+            className="modal"
+            style={{ maxWidth: 480 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="modal-head">
+              <h2>编辑草稿 Key</h2>
+              <button className="icon-btn" onClick={() => setEditingDraft(null)}>
+                ✕
+              </button>
+            </header>
+            <div className="modal-body">
+              <p className="settings-group-desc">
+                ⚠️ 草稿 Key 以<strong>明文</strong>保存在本机配置里，不进加密库，适合长期临时中转
+                / 测试用。敏感生产密钥请放进 zzkey。
+              </p>
+              <label className="field">
+                <span>显示名</span>
+                <input
+                  value={editingDraft.draft.name}
+                  onChange={(e) =>
+                    setEditingDraft({
+                      ...editingDraft,
+                      draft: { ...editingDraft.draft, name: e.target.value },
+                    })
+                  }
+                  placeholder="如 临时中转"
+                />
+              </label>
+              <label className="field">
+                <span>baseurl</span>
+                <input
+                  value={editingDraft.draft.base_url}
+                  onChange={(e) =>
+                    setEditingDraft({
+                      ...editingDraft,
+                      draft: { ...editingDraft.draft, base_url: e.target.value },
+                    })
+                  }
+                  placeholder="https://api.example.com/v1"
+                />
+              </label>
+              <label className="field">
+                <span>API Key</span>
+                <input
+                  value={editingDraft.draft.api_key}
+                  onChange={(e) =>
+                    setEditingDraft({
+                      ...editingDraft,
+                      draft: { ...editingDraft.draft, api_key: e.target.value },
+                    })
+                  }
+                  placeholder="sk-…"
+                />
+              </label>
+              <label className="field">
+                <span>模型 id</span>
+                <input
+                  value={editingDraft.draft.model_id}
+                  onChange={(e) =>
+                    setEditingDraft({
+                      ...editingDraft,
+                      draft: { ...editingDraft.draft, model_id: e.target.value },
+                    })
+                  }
+                  placeholder="gpt-4o-mini"
+                />
+              </label>
+              <div className="field-row">
+                <label className="field">
+                  <span>文档站</span>
+                  <input
+                    value={editingDraft.draft.docs_url}
+                    onChange={(e) =>
+                      setEditingDraft({
+                        ...editingDraft,
+                        draft: { ...editingDraft.draft, docs_url: e.target.value },
+                      })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>控制台</span>
+                  <input
+                    value={editingDraft.draft.console_url}
+                    onChange={(e) =>
+                      setEditingDraft({
+                        ...editingDraft,
+                        draft: {
+                          ...editingDraft.draft,
+                          console_url: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+            <footer className="modal-foot">
+              <div className="spacer" />
+              <button className="btn" onClick={() => setEditingDraft(null)}>
+                取消
+              </button>
+              <button className="btn primary" onClick={saveDraft}>
+                保存
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </>
   );
 }

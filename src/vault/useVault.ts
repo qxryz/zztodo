@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { vaultApi } from "./api";
 import type { VaultStatus } from "./types";
 
@@ -16,6 +17,17 @@ export function useVault() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // Menu-bar "锁定 Key 库" locks on the Rust side; mirror that into React state.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("tray://vault-locked", () => {
+      refresh();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
   }, [refresh]);
 
   const lock = useCallback(async () => {

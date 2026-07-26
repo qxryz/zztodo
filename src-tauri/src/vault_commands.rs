@@ -319,7 +319,11 @@ pub fn vault_status(state: State<VaultState>) -> Result<VaultStatus, String> {
 }
 
 #[tauri::command]
-pub fn vault_create(state: State<VaultState>, password: String) -> Result<VaultStatus, String> {
+pub fn vault_create(
+    app: tauri::AppHandle,
+    state: State<VaultState>,
+    password: String,
+) -> Result<VaultStatus, String> {
     if state.path.exists() {
         return Err("库已存在".into());
     }
@@ -332,20 +336,29 @@ pub fn vault_create(state: State<VaultState>, password: String) -> Result<VaultS
     };
     persist(&state.path, &unlocked)?;
     *state.inner.lock().map_err(|e| e.to_string())? = Some(unlocked);
-    vault_status(state)
+    let status = vault_status(state)?;
+    let _ = crate::tray::rebuild_tray(&app);
+    Ok(status)
 }
 
 #[tauri::command]
-pub fn vault_unlock(state: State<VaultState>, password: String) -> Result<VaultStatus, String> {
+pub fn vault_unlock(
+    app: tauri::AppHandle,
+    state: State<VaultState>,
+    password: String,
+) -> Result<VaultStatus, String> {
     let bytes = std::fs::read(&state.path).map_err(|_| ERR_BAD_PASSWORD.to_string())?;
     let data = decrypt_vault(&bytes, &password)?;
     *state.inner.lock().map_err(|e| e.to_string())? = Some(Unlocked { password, data });
-    vault_status(state)
+    let status = vault_status(state)?;
+    let _ = crate::tray::rebuild_tray(&app);
+    Ok(status)
 }
 
 #[tauri::command]
-pub fn vault_lock(state: State<VaultState>) -> Result<(), String> {
+pub fn vault_lock(app: tauri::AppHandle, state: State<VaultState>) -> Result<(), String> {
     *state.inner.lock().map_err(|e| e.to_string())? = None;
+    let _ = crate::tray::rebuild_tray(&app);
     Ok(())
 }
 

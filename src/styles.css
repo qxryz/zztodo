@@ -969,6 +969,77 @@ input[type="range"] {
   flex-wrap: wrap;
 }
 
+/* ---------- tray / 快捷栏 settings ---------- */
+.tray-fixed-list,
+.tray-extra-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.tray-fixed-item,
+.tray-extra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 100%;
+}
+.tray-fixed-badge {
+  font-size: calc(12.5px * var(--fs, 1));
+  font-weight: 650;
+  color: var(--accent);
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+}
+.tray-extra-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.tray-extra-kind {
+  font-size: calc(13px * var(--fs, 1));
+  font-weight: 600;
+  color: var(--text);
+}
+.tray-extra-select {
+  max-width: 100%;
+}
+.tray-extra-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tray-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+.tray-preview {
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(11.5px * var(--fs, 1));
+  color: var(--text-dim);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
 .segmented {
   display: flex;
   background: var(--bg-input);

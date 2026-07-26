@@ -1,6 +1,7 @@
 mod db;
 mod models;
 mod scan;
+mod tray;
 mod vault;
 mod vault_commands;
 
@@ -22,21 +23,39 @@ fn list_projects(db: State<Db>) -> Result<Vec<Project>, String> {
 }
 
 #[tauri::command]
-fn create_project(db: State<Db>, input: ProjectInput) -> Result<Project, String> {
+fn create_project(
+    app: tauri::AppHandle,
+    db: State<Db>,
+    input: ProjectInput,
+) -> Result<Project, String> {
     let conn = db.0.lock().map_err(err)?;
-    db::create(&conn, &input).map_err(err)
+    let p = db::create(&conn, &input).map_err(err)?;
+    drop(conn);
+    let _ = tray::rebuild_tray(&app);
+    Ok(p)
 }
 
 #[tauri::command]
-fn update_project(db: State<Db>, id: i64, input: ProjectInput) -> Result<Project, String> {
+fn update_project(
+    app: tauri::AppHandle,
+    db: State<Db>,
+    id: i64,
+    input: ProjectInput,
+) -> Result<Project, String> {
     let conn = db.0.lock().map_err(err)?;
-    db::update(&conn, id, &input).map_err(err)
+    let p = db::update(&conn, id, &input).map_err(err)?;
+    drop(conn);
+    let _ = tray::rebuild_tray(&app);
+    Ok(p)
 }
 
 #[tauri::command]
-fn delete_project(db: State<Db>, id: i64) -> Result<(), String> {
+fn delete_project(app: tauri::AppHandle, db: State<Db>, id: i64) -> Result<(), String> {
     let conn = db.0.lock().map_err(err)?;
-    db::delete(&conn, id).map_err(err)
+    db::delete(&conn, id).map_err(err)?;
+    drop(conn);
+    let _ = tray::rebuild_tray(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -60,6 +79,10 @@ pub fn run() {
             db::init(&conn).expect("init db");
             app.manage(Db(Mutex::new(conn)));
             app.manage(VaultState::new(dir.join("keys.vault")));
+            app.manage(tray::TrayState::load(dir.join("tray_config.json")));
+            if let Err(e) = tray::init_tray(app.handle()) {
+                eprintln!("[tray] init failed: {e}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -68,6 +91,9 @@ pub fn run() {
             update_project,
             delete_project,
             scan_folder,
+            tray::tray_get_config,
+            tray::tray_set_config,
+            tray::tray_rebuild,
             vault_commands::vault_status,
             vault_commands::vault_create,
             vault_commands::vault_unlock,
