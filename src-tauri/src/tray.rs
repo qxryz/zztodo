@@ -189,40 +189,14 @@ pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
 }
 
 fn tray_icon(_app: &AppHandle) -> Result<tauri::image::Image<'static>, String> {
-    // Hand-rolled 22×22 template glyph (black on transparent). macOS treats
-    // template images as monochrome masks that flip with the menu-bar theme.
-    build_template_glyph()
-}
-
-fn build_template_glyph() -> Result<tauri::image::Image<'static>, String> {
-    const W: u32 = 22;
-    const H: u32 = 22;
-    let mut rgba = vec![0u8; (W * H * 4) as usize];
-    let mut put = |x: i32, y: i32| {
-        if x >= 0 && y >= 0 && (x as u32) < W && (y as u32) < H {
-            let i = ((y as u32 * W + x as u32) * 4) as usize;
-            rgba[i] = 0;
-            rgba[i + 1] = 0;
-            rgba[i + 2] = 0;
-            rgba[i + 3] = 255;
-        }
-    };
-    // Rounded-ish card outline.
-    for x in 4..18 {
-        put(x, 3);
-        put(x, 18);
-    }
-    for y in 3..19 {
-        put(4, y);
-        put(17, y);
-    }
-    // Three checklist rows.
-    for &(y, x0, x1) in &[(8, 7, 15), (12, 7, 15), (16, 7, 15)] {
-        for x in x0..x1 {
-            put(x, y);
-        }
-    }
-    Ok(tauri::image::Image::new_owned(rgba, W, H))
+    // 44×44 template PNG (black + alpha). macOS treats template images as
+    // monochrome masks that automatically invert for light/dark menu bars.
+    // Prefer @2x for Retina sharpness; fall back to 22×22 if decode fails.
+    const HI: &[u8] = include_bytes!("../icons/trayTemplate@2x.png");
+    const LO: &[u8] = include_bytes!("../icons/trayTemplate.png");
+    tauri::image::Image::from_bytes(HI)
+        .or_else(|_| tauri::image::Image::from_bytes(LO))
+        .map_err(|e| e.to_string())
 }
 
 // ─── menu construction ───────────────────────────────────────────────────────
