@@ -18,8 +18,6 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
   const [nextSteps, setNextSteps] = useState("");
   const [quadrant, setQuadrant] = useState<Quadrant | "">("");
   const [saving, setSaving] = useState(false);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [dragOverQuad, setDragOverQuad] = useState<string | null>(null);
 
   const activeProjects = projects.filter((p) => p.status === "active");
 
@@ -59,50 +57,6 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
     onSaved();
   };
 
-  const handleDragStart = (e: React.DragEvent, id: number) => {
-    setDraggingId(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(id));
-  };
-
-  const handleDragEnd = () => {
-    setDraggingId(null);
-    setDragOverQuad(null);
-  };
-
-  const handleDragEnter = (e: React.DragEvent, quadKey: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverQuad(quadKey);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = async (e: React.DragEvent, newQuadrant: Quadrant | null) => {
-    e.preventDefault();
-    const id = Number(e.dataTransfer.getData("text/plain"));
-    if (!id || isNaN(id)) return;
-    setDraggingId(null);
-    setDragOverQuad(null);
-
-    const entry = sageEntries.find((ex) => ex.id === id);
-    if (!entry) return;
-    if (entry.quadrant === newQuadrant) return;
-
-    const input: SageEntryInput = {
-      project_id: entry.project_id,
-      where_stopped: entry.where_stopped,
-      next_steps: entry.next_steps,
-      quadrant: newQuadrant,
-    };
-    await api.sageUpdate(id, input);
-    await loadEntries();
-    onSaved();
-  };
-
   const entriesByQuadrant = (q: Quadrant) =>
     sageEntries.filter((e) => e.quadrant === q);
 
@@ -113,60 +67,40 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
 
   const valid = selectedProject !== "";
 
-  const renderCell = (quadKey: string, label: string, entries: SageEntry[], cellClass: string) => {
-    const targetQuad: Quadrant | null =
-      quadKey === "uncat" ? null : (quadKey as Quadrant);
-
-    return (
-      <div
-        key={quadKey}
-        className={`quadrant-cell ${cellClass} ${dragOverQuad === quadKey ? "drag-over" : ""}`}
-        onDragEnter={(e) => handleDragEnter(e, quadKey)}
-        onDragOver={handleDragOver}
-        onDrop={(e) => handleDrop(e, targetQuad)}
-      >
-        <div className="quadrant-cell-head">{label}</div>
-        {entries.length === 0 ? (
-          <div className="quadrant-cell-empty">—</div>
-        ) : (
-          entries.map((e) => (
-            <div
-              key={e.id}
-              className={`quadrant-entry ${draggingId === e.id ? "dragging" : ""}`}
-              draggable
-              onDragStart={(ev) => handleDragStart(ev, e.id)}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDrop={(ev) => {
-                ev.stopPropagation();
-                handleDrop(ev, targetQuad);
-              }}
-            >
-              <div className="quadrant-entry-project">
-                {projectName(e.project_id)}
-              </div>
-              {e.where_stopped && (
-                <div className="quadrant-entry-text">
-                  中断: {e.where_stopped}
-                </div>
-              )}
-              {e.next_steps && (
-                <div className="quadrant-entry-text">
-                  下一步: {e.next_steps}
-                </div>
-              )}
-              <button
-                className="mini mini--danger quadrant-entry-del"
-                onClick={() => handleDelete(e.id)}
-              >
-                删除
-              </button>
-            </div>
-          ))
-        )}
+  const renderEntry = (e: SageEntry) => (
+    <div key={e.id} className="quadrant-entry">
+      <div className="quadrant-entry-project">
+        {projectName(e.project_id)}
       </div>
-    );
-  };
+      {e.where_stopped && (
+        <div className="quadrant-entry-text">
+          中断: {e.where_stopped}
+        </div>
+      )}
+      {e.next_steps && (
+        <div className="quadrant-entry-text">
+          下一步: {e.next_steps}
+        </div>
+      )}
+      <button
+        className="mini mini--danger quadrant-entry-del"
+        onClick={() => handleDelete(e.id)}
+      >
+        删除
+      </button>
+    </div>
+  );
+
+  const renderCell = (label: string, entries: SageEntry[], cellClass: string) => (
+    <div className={`quadrant-cell ${cellClass}`}>
+      <div className="quadrant-cell-head">{label}</div>
+      {entries.length === 0 ? (
+        <div className="quadrant-cell-empty">—</div>
+      ) : (
+        entries.map(renderEntry)
+      )}
+    </div>
+  );
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -282,10 +216,14 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
             ) : (
               <div className="quadrant-grid">
                 {(["q1", "q2", "q3", "q4"] as Quadrant[]).map((q) =>
-                  renderCell(q, QUADRANT_META[q].label, entriesByQuadrant(q), `quadrant-cell--${q}`)
+                  renderCell(
+                    QUADRANT_META[q].label,
+                    entriesByQuadrant(q),
+                    `quadrant-cell--${q}`
+                  )
                 )}
                 {unclassified.length > 0 &&
-                  renderCell("uncat", "未分类", unclassified, "quadrant-cell--uncat")}
+                  renderCell("未分类", unclassified, "quadrant-cell--uncat")}
               </div>
             )}
           </div>

@@ -2224,10 +2224,3 @@ input[type="range"] {
   align-self: flex-end;
   margin-top: 2px;
 }
-.quadrant-entry.dragging {
-  opacity: 0.35;
-}
-.quadrant-cell.drag-over {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
