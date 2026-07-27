@@ -1,4 +1,4 @@
-use crate::models::{Project, ProjectInput};
+use crate::models::{Project, ProjectInput, SageEntry, SageEntryInput};
 use rusqlite::{params, Connection, Row};
 use std::sync::Mutex;
 
@@ -66,6 +66,17 @@ pub fn init(conn: &Connection) -> rusqlite::Result<()> {
     if !has_favorite {
         conn.execute_batch("ALTER TABLE projects ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;")?;
     }
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS sage_entries (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id    INTEGER NOT NULL,
+            where_stopped TEXT NOT NULL DEFAULT '',
+            next_steps    TEXT NOT NULL DEFAULT '',
+            quadrant      TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+         );",
+    )?;
     Ok(())
 }
 
@@ -107,5 +118,93 @@ pub fn get(conn: &Connection, id: i64) -> rusqlite::Result<Project> {
 
 pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM projects WHERE id=?1", params![id])?;
+    Ok(())
+}
+
+fn row_to_sage(row: &Row) -> rusqlite::Result<SageEntry> {
+    Ok(SageEntry {
+        id: row.get("id")?,
+        project_id: row.get("project_id")?,
+        where_stopped: row.get("where_stopped")?,
+        next_steps: row.get("next_steps")?,
+        quadrant: row.get("quadrant")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        project_name: None,
+    })
+}
+
+pub fn list_sage_entries(conn: &Connection) -> rusqlite::Result<Vec<SageEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT s.*, p.name as project_name FROM sage_entries s \
+         LEFT JOIN projects p ON s.project_id = p.id \
+         ORDER BY s.updated_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let mut e = row_to_sage(row)?;
+        e.project_name = row.get("project_name")?;
+        Ok(e)
+    })?;
+    rows.collect()
+}
+
+#[allow(dead_code)]
+pub fn list_sage_entries_by_project(
+    conn: &Connection,
+    project_id: i64,
+) -> rusqlite::Result<Vec<SageEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT s.*, p.name as project_name FROM sage_entries s \
+         LEFT JOIN projects p ON s.project_id = p.id \
+         WHERE s.project_id = ?1 \
+         ORDER BY s.updated_at DESC",
+    )?;
+    let rows = stmt.query_map(params![project_id], |row| {
+        let mut e = row_to_sage(row)?;
+        e.project_name = row.get("project_name")?;
+        Ok(e)
+    })?;
+    rows.collect()
+}
+
+pub fn create_sage_entry(conn: &Connection, input: &SageEntryInput) -> rusqlite::Result<SageEntry> {
+    conn.execute(
+        "INSERT INTO sage_entries (project_id, where_stopped, next_steps, quadrant) \
+         VALUES (?1, ?2, ?3, ?4)",
+        params![input.project_id, input.where_stopped, input.next_steps, input.quadrant],
+    )?;
+    let id = conn.last_insert_rowid();
+    get_sage_entry(conn, id)
+}
+
+pub fn update_sage_entry(
+    conn: &Connection,
+    id: i64,
+    input: &SageEntryInput,
+) -> rusqlite::Result<SageEntry> {
+    conn.execute(
+        "UPDATE sage_entries SET project_id=?1, where_stopped=?2, next_steps=?3, quadrant=?4, \
+         updated_at=datetime('now') WHERE id=?5",
+        params![input.project_id, input.where_stopped, input.next_steps, input.quadrant, id],
+    )?;
+    get_sage_entry(conn, id)
+}
+
+pub fn get_sage_entry(conn: &Connection, id: i64) -> rusqlite::Result<SageEntry> {
+    conn.query_row(
+        "SELECT s.*, p.name as project_name FROM sage_entries s \
+         LEFT JOIN projects p ON s.project_id = p.id \
+         WHERE s.id=?1",
+        params![id],
+        |row| {
+            let mut e = row_to_sage(row)?;
+            e.project_name = row.get("project_name")?;
+            Ok(e)
+        },
+    )
+}
+
+pub fn delete_sage_entry(conn: &Connection, id: i64) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM sage_entries WHERE id=?1", params![id])?;
     Ok(())
 }

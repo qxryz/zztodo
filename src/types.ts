@@ -22,6 +22,31 @@ export type ProjectInput = Omit<Project, "id" | "created_at" | "updated_at">;
 
 export type Status = "idea" | "active" | "paused" | "done" | "archived";
 
+export interface SageEntry {
+  id: number;
+  project_id: number;
+  where_stopped: string;
+  next_steps: string;
+  quadrant: Quadrant | null;
+  created_at: string;
+  updated_at: string;
+  project_name: string | null;
+}
+
+export type SageEntryInput = Pick<
+  SageEntry,
+  "project_id" | "where_stopped" | "next_steps" | "quadrant"
+>;
+
+export type Quadrant = "q1" | "q2" | "q3" | "q4";
+
+export const QUADRANT_META: Record<Quadrant, { label: string; desc: string }> = {
+  q1: { label: "紧急重要", desc: "立刻处理" },
+  q2: { label: "重要不紧急", desc: "计划安排" },
+  q3: { label: "紧急不重要", desc: "委派他人" },
+  q4: { label: "不紧急不重要", desc: "暂缓删除" },
+};
+
 export interface FolderScan {
   suggested_name: string;
   tech_stack: string[];

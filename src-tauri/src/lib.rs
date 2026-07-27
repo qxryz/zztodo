@@ -6,7 +6,7 @@ mod vault;
 mod vault_commands;
 
 use db::Db;
-use models::{FolderScan, Project, ProjectInput};
+use models::{FolderScan, Project, ProjectInput, SageEntry, SageEntryInput};
 use rusqlite::Connection;
 use std::sync::Mutex;
 use tauri::{Manager, RunEvent, State, WindowEvent};
@@ -63,6 +63,30 @@ fn scan_folder(folder: String) -> Result<FolderScan, String> {
     Ok(scan::scan_folder(&folder))
 }
 
+#[tauri::command]
+fn list_sage_entries(db: State<Db>) -> Result<Vec<SageEntry>, String> {
+    let conn = db.0.lock().map_err(err)?;
+    db::list_sage_entries(&conn).map_err(err)
+}
+
+#[tauri::command]
+fn create_sage_entry(db: State<Db>, input: SageEntryInput) -> Result<SageEntry, String> {
+    let conn = db.0.lock().map_err(err)?;
+    db::create_sage_entry(&conn, &input).map_err(err)
+}
+
+#[tauri::command]
+fn update_sage_entry(db: State<Db>, id: i64, input: SageEntryInput) -> Result<SageEntry, String> {
+    let conn = db.0.lock().map_err(err)?;
+    db::update_sage_entry(&conn, id, &input).map_err(err)
+}
+
+#[tauri::command]
+fn delete_sage_entry(db: State<Db>, id: i64) -> Result<(), String> {
+    let conn = db.0.lock().map_err(err)?;
+    db::delete_sage_entry(&conn, id).map_err(err)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -102,6 +126,10 @@ pub fn run() {
             update_project,
             delete_project,
             scan_folder,
+            list_sage_entries,
+            create_sage_entry,
+            update_sage_entry,
+            delete_sage_entry,
             tray::tray_get_config,
             tray::tray_set_config,
             tray::tray_rebuild,

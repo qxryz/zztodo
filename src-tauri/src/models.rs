@@ -60,3 +60,24 @@ pub struct FolderScan {
     pub tech_stack: Vec<String>,
     pub repo: String,
 }
+
+/// A sage-time interruption record attached to a project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SageEntry {
+    pub id: i64,
+    pub project_id: i64,
+    pub where_stopped: String,
+    pub next_steps: String,
+    pub quadrant: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub project_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SageEntryInput {
+    pub project_id: i64,
+    pub where_stopped: String,
+    pub next_steps: String,
+    pub quadrant: Option<String>,
+}

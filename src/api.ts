@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Project, ProjectInput, FolderScan } from "./types";
+import type { Project, ProjectInput, FolderScan, SageEntry, SageEntryInput } from "./types";
 import type { TrayConfig } from "./trayTypes";
 
 export const api = {
@@ -14,4 +14,10 @@ export const api = {
   traySetConfig: (config: TrayConfig) =>
     invoke<TrayConfig>("tray_set_config", { config }),
   trayRebuild: () => invoke<void>("tray_rebuild"),
+
+  sageList: () => invoke<SageEntry[]>("list_sage_entries"),
+  sageCreate: (input: SageEntryInput) => invoke<SageEntry>("create_sage_entry", { input }),
+  sageUpdate: (id: number, input: SageEntryInput) =>
+    invoke<SageEntry>("update_sage_entry", { id, input }),
+  sageDelete: (id: number) => invoke<void>("delete_sage_entry", { id }),
 };

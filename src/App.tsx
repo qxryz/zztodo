@@ -13,6 +13,7 @@ import { LayoutSwitch } from "./components/LayoutSwitch";
 import { ModeSwitch } from "./components/ModeSwitch";
 import { Editor } from "./components/Editor";
 import { Settings } from "./components/Settings";
+import { SageTime } from "./components/SageTime";
 import { KeysPage } from "./components/keys/KeysPage";
 import { useVault } from "./vault/useVault";
 import { useIdleLock } from "./vault/useIdleLock";
@@ -33,6 +34,7 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<Project | "new" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sageOpen, setSageOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const vault = useVault();
   const autoLock = useAutoLock();
@@ -114,7 +116,16 @@ export default function App() {
               </button>
             )
           ) : (
-            <LayoutSwitch layout={layout} onChange={setLayout} />
+            <>
+              <LayoutSwitch layout={layout} onChange={setLayout} />
+              <button
+                className="icon-btn sage-btn"
+                title="贤者时间"
+                onClick={() => setSageOpen(true)}
+              >
+                🧘
+              </button>
+            </>
           )}
           <button
             className="icon-btn"
@@ -232,6 +243,14 @@ export default function App() {
           onEntriesReset={() => setKeysVersion((v) => v + 1)}
           projects={projects}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {sageOpen && (
+        <SageTime
+          projects={projects}
+          onClose={() => setSageOpen(false)}
+          onSaved={refresh}
         />
       )}
     </div>
