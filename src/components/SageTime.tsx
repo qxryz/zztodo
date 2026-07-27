@@ -113,50 +113,60 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
 
   const valid = selectedProject !== "";
 
-  const renderCell = (quadKey: string, label: string, entries: SageEntry[], cellClass: string) => (
-    <div
-      key={quadKey}
-      className={`quadrant-cell ${cellClass} ${dragOverQuad === quadKey ? "drag-over" : ""}`}
-      onDragEnter={(e) => handleDragEnter(e, quadKey)}
-      onDragOver={handleDragOver}
-      onDrop={(e) => handleDrop(e, quadKey === "uncat" ? null : (quadKey as Quadrant))}
-    >
-      <div className="quadrant-cell-head">{label}</div>
-      {entries.length === 0 ? (
-        <div className="quadrant-cell-empty">—</div>
-      ) : (
-        entries.map((e) => (
-          <div
-            key={e.id}
-            className={`quadrant-entry ${draggingId === e.id ? "dragging" : ""}`}
-            draggable
-            onDragStart={(ev) => handleDragStart(ev, e.id)}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="quadrant-entry-project">
-              {projectName(e.project_id)}
-            </div>
-            {e.where_stopped && (
-              <div className="quadrant-entry-text">
-                中断: {e.where_stopped}
-              </div>
-            )}
-            {e.next_steps && (
-              <div className="quadrant-entry-text">
-                下一步: {e.next_steps}
-              </div>
-            )}
-            <button
-              className="mini mini--danger quadrant-entry-del"
-              onClick={() => handleDelete(e.id)}
+  const renderCell = (quadKey: string, label: string, entries: SageEntry[], cellClass: string) => {
+    const targetQuad: Quadrant | null =
+      quadKey === "uncat" ? null : (quadKey as Quadrant);
+
+    return (
+      <div
+        key={quadKey}
+        className={`quadrant-cell ${cellClass} ${dragOverQuad === quadKey ? "drag-over" : ""}`}
+        onDragEnter={(e) => handleDragEnter(e, quadKey)}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, targetQuad)}
+      >
+        <div className="quadrant-cell-head">{label}</div>
+        {entries.length === 0 ? (
+          <div className="quadrant-cell-empty">—</div>
+        ) : (
+          entries.map((e) => (
+            <div
+              key={e.id}
+              className={`quadrant-entry ${draggingId === e.id ? "dragging" : ""}`}
+              draggable
+              onDragStart={(ev) => handleDragStart(ev, e.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={(ev) => {
+                ev.stopPropagation();
+                handleDrop(ev, targetQuad);
+              }}
             >
-              删除
-            </button>
-          </div>
-        ))
-      )}
-    </div>
-  );
+              <div className="quadrant-entry-project">
+                {projectName(e.project_id)}
+              </div>
+              {e.where_stopped && (
+                <div className="quadrant-entry-text">
+                  中断: {e.where_stopped}
+                </div>
+              )}
+              {e.next_steps && (
+                <div className="quadrant-entry-text">
+                  下一步: {e.next_steps}
+                </div>
+              )}
+              <button
+                className="mini mini--danger quadrant-entry-del"
+                onClick={() => handleDelete(e.id)}
+              >
+                删除
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="overlay" onClick={onClose}>
