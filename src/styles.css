@@ -2176,13 +2176,48 @@ input[type="range"] {
   border-radius: 12px;
   padding: 14px;
   min-height: 120px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+/* live drop target */
+.quadrant-cell.is-target {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--bg-card);
+}
+/* hovering the card's own quadrant — dropping there changes nothing */
+.quadrant-cell.is-origin {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+/* while dragging, dashed outlines advertise every landable cell */
+.quadrant-grid.is-dragging .quadrant-cell:not(.is-target):not(.is-origin) {
+  border-color: var(--border-strong);
+  border-style: dashed;
 }
 .quadrant-cell-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: calc(13px * var(--fs, 1));
   font-weight: 700;
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
+}
+.quadrant-cell-desc {
+  font-size: calc(10.5px * var(--fs, 1));
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.quadrant-cell-count {
+  margin-left: auto;
+  font-size: calc(10.5px * var(--fs, 1));
+  font-weight: 700;
+  color: var(--text-dim);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
 }
 .quadrant-cell--q1 .quadrant-cell-head { color: #e5484d; }
 .quadrant-cell--q2 .quadrant-cell-head { color: #4f9dff; }
@@ -2200,6 +2235,13 @@ input[type="range"] {
   text-align: center;
   padding: 24px 0;
 }
+.quadrant-grid.is-dragging .quadrant-cell-empty {
+  color: var(--text-dim);
+}
+/* dragging a card must not smear a text selection across the grid */
+.quadrant-grid {
+  user-select: none;
+}
 .quadrant-entry {
   display: flex;
   flex-direction: column;
@@ -2209,6 +2251,37 @@ input[type="range"] {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+  transition: border-color 0.12s ease, transform 0.12s ease, opacity 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.quadrant-entry:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.quadrant-entry:active {
+  cursor: grabbing;
+}
+/* the original card, left behind while its clone follows the cursor */
+.quadrant-entry.is-src {
+  opacity: 0.3;
+  border-style: dashed;
+  transform: scale(0.97);
+  pointer-events: none;
+}
+.quadrant-entry--float {
+  position: fixed;
+  z-index: 200;
+  width: 240px;
+  max-width: 60vw;
+  margin: 0;
+  pointer-events: none;
+  cursor: grabbing;
+  border-color: var(--accent);
+  transform: scale(1.03) rotate(-1.5deg);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  transition: none;
 }
 .quadrant-entry-project {
   font-size: calc(12px * var(--fs, 1));
@@ -2223,4 +2296,8 @@ input[type="range"] {
 .quadrant-entry-del {
   align-self: flex-end;
   margin-top: 2px;
+}
+.quadrant-tip {
+  margin: 12px 0 0;
+  text-align: center;
 }
