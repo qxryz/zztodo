@@ -6323,7 +6323,7 @@ dependencies = [
 
 [[package]]
 name = "zztodo"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "argon2",
  "base64 0.22.1",
