@@ -1,6 +1,6 @@
 [package]
 name = "zztodo"
-version = "0.1.25"
+version = "0.1.26"
 description = "A lightweight macOS desktop app to track your vibecoding projects"
 authors = ["you"]
 edition = "2021"
