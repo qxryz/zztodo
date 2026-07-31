@@ -28,6 +28,14 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
   const [quadrant, setQuadrant] = useState<Quadrant | "">("");
   const [saving, setSaving] = useState(false);
 
+  /** Edit state for quadrant cards */
+  const [editingEntry, setEditingEntry] = useState<SageEntry | null>(null);
+  const [editProject, setEditProject] = useState<number | "">("");
+  const [editWhereStopped, setEditWhereStopped] = useState("");
+  const [editNextSteps, setEditNextSteps] = useState("");
+  const [editQuadrant, setEditQuadrant] = useState<Quadrant | "">("");
+  const [editSaving, setEditSaving] = useState(false);
+
   /**
    * Quadrant drag uses pointer events, not HTML5 drag-and-drop: the Tauri
    * webview owns native drag, so `drop` never fires reliably inside it. Same
@@ -95,6 +103,45 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
     await api.sageDelete(id);
     await loadEntries();
     onSaved();
+  };
+
+  const handleCopy = async (entry: SageEntry) => {
+    await api.sageCreate({
+      project_id: entry.project_id,
+      where_stopped: entry.where_stopped,
+      next_steps: entry.next_steps,
+      quadrant: entry.quadrant,
+    });
+    await loadEntries();
+    onSaved();
+  };
+
+  const startEdit = (entry: SageEntry) => {
+    setEditingEntry(entry);
+    setEditProject(entry.project_id);
+    setEditWhereStopped(entry.where_stopped);
+    setEditNextSteps(entry.next_steps);
+    setEditQuadrant(entry.quadrant ?? "");
+  };
+
+  const cancelEdit = () => setEditingEntry(null);
+
+  const saveEdit = async () => {
+    if (!editingEntry || editProject === "") return;
+    setEditSaving(true);
+    try {
+      await api.sageUpdate(editingEntry.id, {
+        project_id: editProject as number,
+        where_stopped: editWhereStopped.trim(),
+        next_steps: editNextSteps.trim(),
+        quadrant: editQuadrant !== "" ? editQuadrant : null,
+      });
+      setEditingEntry(null);
+      await loadEntries();
+      onSaved();
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   /** Which cell contains this point, if any. */
@@ -211,12 +258,26 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
           下一步: {e.next_steps}
         </div>
       )}
-      <button
-        className="mini mini--danger quadrant-entry-del"
-        onClick={() => handleDelete(e.id)}
-      >
-        删除
-      </button>
+      <div className="quadrant-entry-actions">
+        <button
+          className="mini quadrant-entry-edit"
+          onClick={() => startEdit(e)}
+        >
+          编辑
+        </button>
+        <button
+          className="mini quadrant-entry-copy"
+          onClick={() => handleCopy(e)}
+        >
+          复制
+        </button>
+        <button
+          className="mini mini--danger quadrant-entry-del"
+          onClick={() => handleDelete(e.id)}
+        >
+          删除
+        </button>
+      </div>
     </div>
   );
 
@@ -380,6 +441,80 @@ export function SageTime({ projects, onClose, onSaved }: Props) {
               <p className="sage-empty">暂无贤者记录</p>
             ) : (
               <>
+                {editingEntry && (
+                  <div className="sage-edit-bar">
+                    <h4 className="sage-edit-title">编辑记录</h4>
+                    <label className="field">
+                      <span>项目</span>
+                      <select
+                        value={editProject}
+                        onChange={(e) =>
+                          setEditProject(
+                            e.target.value ? Number(e.target.value) : ""
+                          )
+                        }
+                      >
+                        <option value="">— 选择项目 —</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>中断位置</span>
+                      <textarea
+                        rows={2}
+                        value={editWhereStopped}
+                        onChange={(e) => setEditWhereStopped(e.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>下一步</span>
+                      <textarea
+                        rows={2}
+                        value={editNextSteps}
+                        onChange={(e) => setEditNextSteps(e.target.value)}
+                      />
+                    </label>
+                    <fieldset className="field">
+                      <legend>象限</legend>
+                      <div className="quadrant-picker">
+                        {(["q1", "q2", "q3", "q4"] as Quadrant[]).map((q) => (
+                          <button
+                            key={q}
+                            className={`quadrant-opt quadrant-opt--${q} ${
+                              editQuadrant === q ? "active" : ""
+                            }`}
+                            onClick={() =>
+                              setEditQuadrant(editQuadrant === q ? "" : q)
+                            }
+                          >
+                            <span className="quadrant-opt-label">
+                              {QUADRANT_META[q].label}
+                            </span>
+                            <span className="quadrant-opt-desc">
+                              {QUADRANT_META[q].desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <div className="sage-edit-foot">
+                      <button className="btn" onClick={cancelEdit}>
+                        取消
+                      </button>
+                      <button
+                        className="btn primary"
+                        disabled={editProject === "" || editSaving}
+                        onClick={saveEdit}
+                      >
+                        {editSaving ? "保存中…" : "保存"}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className={`quadrant-grid ${dragId !== null ? "is-dragging" : ""}`}>
                   {QUADRANTS.map((q) =>
                     renderCell(

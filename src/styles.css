@@ -2301,3 +2301,35 @@ input[type="range"] {
   margin: 12px 0 0;
   text-align: center;
 }
+
+.quadrant-entry-actions {
+  display: flex;
+  gap: 4px;
+  align-self: flex-end;
+  margin-top: 4px;
+}
+
+.sage-edit-bar {
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sage-edit-title {
+  margin: 0;
+  font-size: calc(14px * var(--fs, 1));
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.sage-edit-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
