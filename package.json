@@ -1,7 +1,7 @@
 {
   "name": "zztodo",
   "private": true,
-  "version": "0.1.27",
+  "version": "0.1.28",
   "type": "module",
   "description": "A lightweight macOS desktop app to track your vibecoding projects",
   "license": "MIT",
