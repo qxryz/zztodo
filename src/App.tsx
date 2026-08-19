@@ -19,6 +19,7 @@ import { useVault } from "./vault/useVault";
 import { useIdleLock } from "./vault/useIdleLock";
 import { useAutoLock } from "./vault/useAutoLock";
 import { useKeyColumnWidths } from "./vault/useKeyColumnWidths";
+import { desktopPlatform } from "./platform";
 
 type Filter = "all" | Status | "pinned" | "favorite";
 
@@ -97,7 +98,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar" data-tauri-drag-region="deep">
+      <header
+        className="topbar"
+        data-tauri-drag-region={desktopPlatform === "macos" ? "deep" : undefined}
+      >
         <ModeSwitch mode={mode} onChange={setMode} />
         {!keysMode && (
           <div className="search">

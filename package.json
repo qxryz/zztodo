@@ -3,13 +3,16 @@
   "private": true,
   "version": "0.1.27",
   "type": "module",
-  "description": "A lightweight macOS desktop app to track your vibecoding projects",
+  "description": "A lightweight desktop app to track your vibecoding projects",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:windows": "tauri build --target x86_64-pc-windows-msvc --bundles nsis --config src-tauri/tauri.ci.conf.json",
+    "build:windows:updater": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:windows": "node --test tests/windows-config.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",

@@ -79,7 +79,7 @@ export const THEME_META: Record<
 > = {
   light: { label: "明亮", icon: "☀️", dark: false, swatch: ["#f6f7f9", "#ffffff", "#2f7ff0"] },
   dark: { label: "暗夜", icon: "🌙", dark: true, swatch: ["#0f1115", "#171a21", "#4f9dff"] },
-  system: { label: "跟随系统", icon: "⌘", dark: false, swatch: null },
+  system: { label: "跟随系统", icon: "◐", dark: false, swatch: null },
   latte: { label: "奶咖", icon: "☕", dark: false, swatch: ["#f4eee4", "#fcfaf4", "#bd7a35"] },
   mint: { label: "薄荷", icon: "🌿", dark: false, swatch: ["#edf5f0", "#fafdfb", "#1d9d68"] },
   sakura: { label: "樱花", icon: "🌸", dark: false, swatch: ["#f9f0f2", "#fffbfc", "#d15c87"] },

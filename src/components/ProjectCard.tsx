@@ -47,7 +47,7 @@ export function ProjectCard({
         <span className="badge-group">
           {project.favorite && <span className="fav-badge">★ 收藏</span>}
           {project.deployed && <span className="live-badge">● LIVE</span>}
-          {project.open_source && <span className="oss-badge">⌥ OSS</span>}
+          {project.open_source && <span className="oss-badge">◇ OSS</span>}
         </span>
       </div>
 

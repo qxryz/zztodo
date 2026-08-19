@@ -53,7 +53,7 @@ export function ProjectRow({
 
       <div className="row-tags">
         {project.deployed && <span className="live-badge">● LIVE</span>}
-        {project.open_source && <span className="oss-badge">⌥ OSS</span>}
+        {project.open_source && <span className="oss-badge">◇ OSS</span>}
       </div>
 
       <div className="row-progress">

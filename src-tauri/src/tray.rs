@@ -1,4 +1,4 @@
-//! macOS menu-bar (status item) for zztodo.
+//! Cross-platform system tray for zztodo.
 //!
 //! Always shows 网站 / 文件夹 submenus of every project that has a URL or
 //! folder. Extra items (重点项目快捷入口、草稿 key、显示窗口、锁定库…) are
@@ -134,12 +134,18 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
     rebuild_tray(app)
 }
 
-/// Whether the menu-bar icon is currently supposed to be shown. Used by the
+/// Whether the system-tray icon is currently supposed to be shown. Used by the
 /// window-close handler to decide between "hide to tray" and "really quit".
 pub fn is_enabled(app: &AppHandle) -> bool {
-    app.try_state::<TrayState>()
+    let configured = app
+        .try_state::<TrayState>()
         .and_then(|s| s.config.lock().ok().map(|c| c.enabled))
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    // If native tray creation failed, closing the window must still quit.
+    // Otherwise the user could be left with a background process that has no
+    // visible window or tray icon to restore it from.
+    configured && app.tray_by_id(TRAY_ID).is_some()
 }
 
 pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
@@ -180,13 +186,31 @@ pub fn rebuild_tray(app: &AppHandle) -> Result<(), String> {
     let builder = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        // Windows users expect left click to restore the app and right click
+        // to open the context menu. macOS keeps its menu-bar convention.
+        .show_menu_on_left_click(!cfg!(target_os = "windows"))
         .tooltip("zztodo")
         .on_menu_event(|app, event| {
             if let Err(e) = handle_menu(app, event.id.as_ref()) {
                 eprintln!("[tray] menu action failed: {e}");
             }
         });
+
+    #[cfg(target_os = "windows")]
+    let builder = builder.on_tray_icon_event(|tray, event| {
+        if let tauri::tray::TrayIconEvent::Click {
+            button: tauri::tray::MouseButton::Left,
+            button_state: tauri::tray::MouseButtonState::Up,
+            ..
+        } = event
+        {
+            let app = tray.app_handle();
+            if let Err(e) = show_main(app) {
+                eprintln!("[tray] show window failed: {e}");
+            }
+            let _ = app.emit("tray://show", ());
+        }
+    });
 
     // Template image = monochrome, adapts to light/dark menu bar on macOS.
     #[cfg(target_os = "macos")]
@@ -211,6 +235,7 @@ fn schedule_rebuild(app: &AppHandle) {
     });
 }
 
+#[cfg(target_os = "macos")]
 fn tray_icon(_app: &AppHandle) -> Result<tauri::image::Image<'static>, String> {
     // 44×44 template PNG (black + alpha). macOS treats template images as
     // monochrome masks that automatically invert for light/dark menu bars.
@@ -220,6 +245,16 @@ fn tray_icon(_app: &AppHandle) -> Result<tauri::image::Image<'static>, String> {
     tauri::image::Image::from_bytes(HI)
         .or_else(|_| tauri::image::Image::from_bytes(LO))
         .map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn tray_icon(_app: &AppHandle) -> Result<tauri::image::Image<'static>, String> {
+    // Template PNGs are intentionally solid black and only become visible
+    // because macOS recolours them. Windows and Linux display the pixels as-is,
+    // which makes that icon disappear on a dark taskbar. Use the regular
+    // full-colour application artwork there instead.
+    const ICON: &[u8] = include_bytes!("../icons/32x32.png");
+    tauri::image::Image::from_bytes(ICON).map_err(|e| e.to_string())
 }
 
 // ─── menu construction ───────────────────────────────────────────────────────
@@ -580,7 +615,7 @@ fn project_field(
         .filter(|s| !s.trim().is_empty()))
 }
 
-fn show_main(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn show_main(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();

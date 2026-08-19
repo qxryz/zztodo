@@ -30,6 +30,7 @@ import {
 } from "../trayTypes";
 import { vaultApi } from "../vault/api";
 import { AUTOLOCK_OPTIONS, type useAutoLock } from "../vault/useAutoLock";
+import { platformCopy } from "../platform";
 
 const TAG_KEYS = Object.keys(TAG_META) as TagKey[];
 const THEME_KEYS = Object.keys(THEME_META) as Theme[];
@@ -44,7 +45,7 @@ type Section = "appearance" | "tray" | "vault" | "marker" | "colors" | "about";
 
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: "appearance", label: "外观", icon: "🎨" },
-  { key: "tray", label: "快捷栏", icon: "📌" },
+  { key: "tray", label: platformCopy.tray, icon: "📌" },
   { key: "vault", label: "Key 库", icon: "🔑" },
   { key: "marker", label: "粘性标记", icon: "🏷" },
   { key: "colors", label: "配色", icon: "🌈" },
@@ -226,7 +227,7 @@ function AppearancePane({
   );
 }
 
-/* ---------- 快捷栏（菜单栏） ---------- */
+/* ---------- 系统托盘 / 菜单栏 ---------- */
 
 function TrayPane({ projects }: { projects: Project[] }) {
   const [cfg, setCfg] = useState<TrayConfig | null>(null);
@@ -254,7 +255,7 @@ function TrayPane({ projects }: { projects: Project[] }) {
     setError("");
     try {
       setCfg(await api.traySetConfig(next));
-      setSavedFlash("已应用到菜单栏");
+      setSavedFlash(`已应用到${platformCopy.tray}`);
       setTimeout(() => setSavedFlash(""), 1600);
     } catch (e) {
       setError(String(e));
@@ -343,9 +344,9 @@ function TrayPane({ projects }: { projects: Project[] }) {
       <div className="settings-group">
         <div className="settings-group-head">
           <div>
-            <h3 className="settings-group-title">显示菜单栏图标</h3>
+            <h3 className="settings-group-title">显示{platformCopy.tray}图标</h3>
             <p className="settings-group-desc">
-              在 macOS 屏幕顶部状态栏显示 zztodo，左键点开快捷菜单。关闭窗口只会隐藏到菜单栏，点「退出」才真正结束进程。
+              在 {platformCopy.trayLocation}显示 zztodo，{platformCopy.trayInteraction}。关闭主窗口后仍会驻留在{platformCopy.tray}，选择「退出」才会结束应用。
             </p>
           </div>
           <button
@@ -372,7 +373,9 @@ function TrayPane({ projects }: { projects: Project[] }) {
           </div>
           <div className="tray-fixed-item">
             <span className="tray-fixed-badge">文件夹</span>
-            <span className="settings-inline-hint">有本地路径的项目 → Finder 打开</span>
+            <span className="settings-inline-hint">
+              有本地路径的项目 → {platformCopy.openFolder}
+            </span>
           </div>
         </div>
       </div>

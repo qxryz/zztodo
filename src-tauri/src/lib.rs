@@ -89,7 +89,19 @@ fn delete_sage_entry(db: State<Db>, id: i64) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Register this before every other plugin. A second launch should focus
+    // the existing window instead of opening another process against the same
+    // database, vault and tray configuration files.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Err(e) = tray::show_main(app) {
+            eprintln!("[single-instance] show window failed: {e}");
+        }
+    }));
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -97,6 +109,16 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
+            // Databases, encrypted vault data and tray configuration are
+            // machine-local state. On Windows, keep them out of roaming
+            // profiles; macOS retains the established Application Support
+            // location so existing installations continue to see their data.
+            #[cfg(target_os = "windows")]
+            let dir = app
+                .path()
+                .app_local_data_dir()
+                .expect("no local app data dir");
+            #[cfg(not(target_os = "windows"))]
             let dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&dir).ok();
             let conn = Connection::open(dir.join("zztodo.db")).expect("open db");
@@ -109,9 +131,9 @@ pub fn run() {
             }
             Ok(())
         })
-        // Red-close / Cmd+W should tuck the window away and leave the menu-bar
-        // icon running. Real quit only happens via the tray「退出」item (or when
-        // the tray itself is disabled).
+        // Closing the main window should tuck it away and leave the system-tray
+        // icon running on every desktop platform. Real quit only happens via
+        // the tray「退出」item (or when the tray itself is disabled).
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if tray::is_enabled(window.app_handle()) {
