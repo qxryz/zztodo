@@ -883,6 +883,10 @@ input[type="range"] {
 .switch.on {
   background: var(--accent);
 }
+.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 .switch-knob {
   position: absolute;
   top: 2.5px;

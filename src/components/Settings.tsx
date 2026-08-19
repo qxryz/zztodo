@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { getVersion } from "@tauri-apps/api/app";
+import {
+  disable as disableAutostart,
+  enable as enableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -41,9 +46,17 @@ const FONT_OPTIONS: { value: FontScale; label: string }[] = [
   { value: "lg", label: "大" },
 ];
 
-type Section = "appearance" | "tray" | "vault" | "marker" | "colors" | "about";
+type Section =
+  | "general"
+  | "appearance"
+  | "tray"
+  | "vault"
+  | "marker"
+  | "colors"
+  | "about";
 
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
+  { key: "general", label: "通用", icon: "⚙️" },
   { key: "appearance", label: "外观", icon: "🎨" },
   { key: "tray", label: platformCopy.tray, icon: "📌" },
   { key: "vault", label: "Key 库", icon: "🔑" },
@@ -94,7 +107,7 @@ export function Settings({
   projects: Project[];
   onClose: () => void;
 }) {
-  const [section, setSection] = useState<Section>("appearance");
+  const [section, setSection] = useState<Section>("general");
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -121,6 +134,7 @@ export function Settings({
           </nav>
 
           <div className="settings-content">
+            {section === "general" && <GeneralPane />}
             {section === "appearance" && (
               <AppearancePane
                 theme={theme}
@@ -150,6 +164,74 @@ export function Settings({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------- 通用 ---------- */
+
+function GeneralPane() {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    isAutostartEnabled()
+      .then((value) => {
+        if (active) setEnabled(value);
+      })
+      .catch(() => {
+        if (active) setError("无法读取开机自启状态");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggle = async () => {
+    if (loading || saving) return;
+
+    const next = !enabled;
+    setSaving(true);
+    setError("");
+    try {
+      if (next) await enableAutostart();
+      else await disableAutostart();
+      setEnabled(next);
+    } catch {
+      setError("设置失败，请稍后重试");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="settings-group">
+      <div className="settings-group-head">
+        <div>
+          <h3 className="settings-group-title">开机自启</h3>
+          <p className="settings-group-desc">登录电脑后自动启动 zztodo。</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-label="开机自启"
+          aria-checked={enabled}
+          className={`switch ${enabled ? "on" : ""}`}
+          disabled={loading || saving}
+          onClick={toggle}
+        >
+          <span className="switch-knob" />
+        </button>
+      </div>
+      {error && <p className="update-hint err">{error}</p>}
     </div>
   );
 }

@@ -101,6 +101,14 @@ pub fn run() {
         }
     }));
 
+    // Register the operating-system integration without enabling it. New
+    // installs stay opted out until the user turns on Settings → 通用 → 开机自启.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        None,
+    ));
+
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

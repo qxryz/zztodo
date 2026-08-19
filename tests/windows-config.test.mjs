@@ -50,6 +50,35 @@ test("desktop launches are single-instance before other Tauri plugins", async ()
   assert.match(lib, /tray::show_main\(app\)/);
 });
 
+test("General settings controls desktop autostart and defaults to opt-in", async () => {
+  const [pkg, cargo, lib, capability, settings] = await Promise.all([
+    readJson("package.json"),
+    readFile("src-tauri/Cargo.toml", "utf8"),
+    readFile("src-tauri/src/lib.rs", "utf8"),
+    readJson("src-tauri/capabilities/default.json"),
+    readFile("src/components/Settings.tsx", "utf8"),
+  ]);
+
+  assert.match(pkg.dependencies["@tauri-apps/plugin-autostart"], /^\^2\./);
+  assert.match(cargo, /tauri-plugin-autostart\s*=\s*"2"/);
+  assert.match(lib, /tauri_plugin_autostart::init\([\s\S]*MacosLauncher::LaunchAgent,[\s\S]*None/);
+  assert.doesNotMatch(lib, /autolaunch\(\)[\s\S]*\.enable\(\)/);
+  assert.deepEqual(
+    capability.permissions.filter((permission) => permission.startsWith("autostart:")),
+    [
+      "autostart:allow-enable",
+      "autostart:allow-disable",
+      "autostart:allow-is-enabled",
+    ],
+  );
+  assert.match(settings, /key: "general", label: "通用"/);
+  assert.match(settings, /useState<Section>\("general"\)/);
+  assert.match(settings, /isAutostartEnabled\(\)/);
+  assert.match(settings, /if \(next\) await enableAutostart\(\)/);
+  assert.match(settings, /else await disableAutostart\(\)/);
+  assert.match(settings, /aria-checked=\{enabled\}/);
+});
+
 test("Windows builds use the supported x64 NSIS configuration", async () => {
   const [base, windows, pkg] = await Promise.all([
     readJson("src-tauri/tauri.conf.json"),
