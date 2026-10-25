@@ -1,7 +1,9 @@
 <p align="center">
-  <video src="https://github.com/qxryz/zztodo/raw/main/docs/promo/zztodo-promo.mp4" poster="docs/promo/poster.jpg" controls muted width="100%">
-    <a href="docs/promo/zztodo-promo.mp4"><img src="docs/promo/poster.jpg" alt="zztodo 宣传片" /></a>
-  </video>
+  <a href="docs/promo/zztodo-promo.mp4">
+    <img src="docs/promo/zztodo-promo.gif" alt="zztodo 宣传片" width="100%" />
+  </a>
+  <br />
+  <sub>点击画面观看 1080p 60fps 完整版</sub>
 </p>
 
 ## 功能
