@@ -1,3 +1,9 @@
+<p align="center">
+  <video src="https://github.com/qxryz/zztodo/raw/main/docs/promo/zztodo-promo.mp4" poster="docs/promo/poster.jpg" controls muted width="100%">
+    <a href="docs/promo/zztodo-promo.mp4"><img src="docs/promo/poster.jpg" alt="zztodo 宣传片" /></a>
+  </video>
+</p>
+
 ## 功能
 
 - **项目卡片**：项目名、定位、技术栈标签、状态、进度条、是否上线、部署方式、线上/仓库地址、备注
