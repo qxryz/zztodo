@@ -12,7 +12,10 @@
     "build:windows:updater": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test:windows": "node --test tests/windows-config.test.mjs"
+    "test:windows": "node --test tests/windows-config.test.mjs",
+    "release:package": "node scripts/package-release.mjs",
+    "release:check": "node scripts/package-release.mjs --check",
+    "test:release": "node --test tests/release-config.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",
