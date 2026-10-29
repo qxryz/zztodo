@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { releaseBuildEnvironment } from "./release-build.mjs";
 
 export const REPOSITORY = "qxryz/zztodo";
 export const MAC_PLATFORM = "darwin-aarch64";
@@ -12,10 +13,11 @@ export function macBuildPlan(projectRoot, inheritedEnv = process.env) {
   for (const name of Object.keys(env)) {
     if (name.startsWith("TAURI_SIGNING_") || name.startsWith("APPLE_") || name === "CARGO_BUILD_TARGET") delete env[name];
   }
+  const releaseEnv = releaseBuildEnvironment({ projectRoot: resolve(projectRoot), cargoDirectory: join(resolve(projectRoot), "src-tauri"), env });
   return {
-    env,
+    env: releaseEnv,
     args: ["build", "--ci", "--target", MAC_TARGET, "--bundles", "app", "--config", "src-tauri/tauri.release.conf.json", "--", "--locked"],
-    app: join(targetDirectory, MAC_TARGET, "release/bundle/macos/zztodo.app"),
+    app: join(releaseEnv.CARGO_TARGET_DIR, MAC_TARGET, "release/bundle/macos/zztodo.app"),
   };
 }
 

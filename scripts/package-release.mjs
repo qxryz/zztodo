@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
 import {
-  existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -11,6 +11,8 @@ import {
   REPOSITORY, hasWindowsAssets, macBuildPlan, mergeManifest, parseReleaseLookup, publicationPolicy, releaseVersion,
   validateBaseManifest, verifyUpdateSignature,
 } from "./lib/zztodo-release.mjs";
+
+import { assertPortableBundle } from "./lib/release-build.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const APP_NAME = "zztodo.app";
@@ -114,6 +116,7 @@ function readBaseManifest(path, version) {
 }
 
 function assertAppVersion(app, version) {
+  assertPortableBundle(app, { projectRoot: ROOT });
   if (!existsSync(join(app, "Contents/MacOS/zztodo"))) throw new Error("The built zztodo App is missing");
   const actual = run("App version check", "/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleShortVersionString", join(app, "Contents/Info.plist")]).trim();
   if (actual !== version) throw new Error("The built App version does not match the release version");
@@ -129,8 +132,30 @@ function verifyArchive(archive, kind, signing, core) {
       delete env.COPYFILE_DISABLE;
       run("Updater round trip", "/usr/bin/tar", ["--mac-metadata", "--xattrs", "-xzf", archive, "-C", scratch], { env });
     }
+    assertPortableBundle(join(scratch, APP_NAME), { projectRoot: ROOT });
     core.verifyApplication(join(scratch, APP_NAME), signing, { notarized: true });
   } finally { rmSync(scratch, { recursive: true, force: true }); }
+}
+
+
+function verifyDmgContents(dmg, version, signing, core) {
+  const scratch = mkdtempSync(join(tmpdir(), "zztodo-dmg-check-"));
+  const mount = join(scratch, "volume");
+  mkdirSync(mount);
+  let mounted = false;
+  try {
+    run("DMG read-only attachment", "/usr/bin/hdiutil", ["attach", "-readonly", "-nobrowse", "-mountpoint", mount, dmg]);
+    mounted = true;
+    const app = join(mount, APP_NAME);
+    assertAppVersion(app, version);
+    core.verifyApplication(app, signing, { notarized: true });
+  } finally {
+    if (mounted) {
+      run("DMG verification detach", "/usr/bin/hdiutil", ["detach", mount]);
+      mounted = false;
+    }
+    if (!mounted) rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 async function main() {
@@ -187,8 +212,23 @@ async function main() {
       run("Copy App into release workspace", "/usr/bin/ditto", [built, app]);
     }, () => assertAppVersion(app, version));
 
-    session.step("sign-app", () => core.signApplication(app, signing), () => core.verifyApplication(app, signing));
-    session.step("notarize-app", () => core.notarizeAndStaple(app, signing, { stateDir: session.stateDir }), () => core.verifyApplication(app, signing, { notarized: true }));
+    const assertSource = () => {
+      if (run("Source commit check", "git", ["rev-parse", "HEAD"], { cwd: ROOT }).trim() !== sourceCommit || run("Working tree check", "git", ["status", "--porcelain"], { cwd: ROOT }).trim()) {
+        throw new Error("The source changed while the release was running; no READY manifest was written");
+      }
+    };
+    assertSource();
+    session.step("sign-app", () => {
+      assertPortableBundle(app, { projectRoot: ROOT });
+      core.signApplication(app, signing);
+    }, () => {
+      assertPortableBundle(app, { projectRoot: ROOT });
+      core.verifyApplication(app, signing);
+    });
+    session.step("notarize-app", () => core.notarizeAndStaple(app, signing, { stateDir: session.stateDir }), () => {
+      assertPortableBundle(app, { projectRoot: ROOT });
+      core.verifyApplication(app, signing, { notarized: true });
+    });
     session.step("zip-app", () => {
       rmSync(zip, { force: true });
       run("Release ZIP creation", "/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, zip]);
@@ -207,14 +247,21 @@ async function main() {
     session.step("sign-dmg", () => {
       const staging = mkdtempSync(join(session.workDir, "dmg-"));
       try {
+        assertPortableBundle(app, { projectRoot: ROOT });
         run("DMG App staging", "/usr/bin/ditto", [app, join(staging, APP_NAME)]);
         symlinkSync("/Applications", join(staging, "Applications"));
         rmSync(dmg, { force: true });
         run("DMG creation", "/usr/bin/hdiutil", ["create", "-quiet", "-volname", "zztodo", "-srcfolder", staging, "-format", "UDZO", dmg]);
         core.signDiskImage(dmg, signing);
       } finally { rmSync(staging, { recursive: true, force: true }); }
-    }, () => core.verifyDiskImage(dmg, signing));
-    session.step("notarize-dmg", () => core.notarizeAndStaple(dmg, signing, { stateDir: session.stateDir }), () => core.verifyDiskImage(dmg, signing, { notarized: true }));
+    }, () => {
+      core.verifyDiskImage(dmg, signing);
+      verifyDmgContents(dmg, version, signing, core);
+    });
+    session.step("notarize-dmg", () => core.notarizeAndStaple(dmg, signing, { stateDir: session.stateDir }), () => {
+      core.verifyDiskImage(dmg, signing, { notarized: true });
+      verifyDmgContents(dmg, version, signing, core);
+    });
 
     const makeManifest = () => mergeManifest({ base: inputs.baseManifest, version, notes, signature: readFileSync(`${updater}.sig`, "utf8").trim(), publishedAt: inputs.publishedAt });
     session.step("manifest", () => {
@@ -226,10 +273,8 @@ async function main() {
       if (!isDeepStrictEqual(JSON.parse(readFileSync(policyPath, "utf8")), publicationPolicy(makeManifest()))) throw new Error("Release publication policy changed unexpectedly");
     });
 
-    const finalCommit = run("Final source commit check", "git", ["rev-parse", "HEAD"], { cwd: ROOT }).trim();
-    if (finalCommit !== sourceCommit || run("Final working tree check", "git", ["status", "--porcelain"], { cwd: ROOT }).trim()) {
-      throw new Error("The source changed while the release was running; no READY manifest was written");
-    }
+    assertSource();
+    assertPortableBundle(app, { projectRoot: ROOT });
     const ready = session.markReady([zip, updater, `${updater}.sig`, dmg, manifestPath]);
     console.log(`zztodo ${version}: ${ready.status}. Signed and notarized assets: ${session.assetsDir}`);
     const policy = publicationPolicy(makeManifest());

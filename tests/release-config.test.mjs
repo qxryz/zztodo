@@ -17,6 +17,8 @@ function fixture(operation) {
 }
 
 const scriptPath = fileURLToPath(new URL("../scripts/package-release.mjs", import.meta.url));
+const buildSupportPath = fileURLToPath(new URL("../scripts/lib/release-build.mjs", import.meta.url));
+const wrapperPath = fileURLToPath(new URL("../scripts/lib/release-rustc-wrapper.mjs", import.meta.url));
 const supportPath = fileURLToPath(new URL("../scripts/lib/zztodo-release.mjs", import.meta.url));
 
 function assertHelpRuns(path) {
@@ -42,6 +44,8 @@ test("the real release CLI runs help through the macOS var path alias", { skip: 
   mkdirSync(join(scripts, "lib"), { recursive: true });
   copyFileSync(scriptPath, join(scripts, "package-release.mjs"));
   copyFileSync(supportPath, join(scripts, "lib/zztodo-release.mjs"));
+  copyFileSync(buildSupportPath, join(scripts, "lib/release-build.mjs"));
+  copyFileSync(wrapperPath, join(scripts, "lib/release-rustc-wrapper.mjs"));
   const alias = join(scripts, "package-release.mjs").replace(/^\/private\/var\//, "/var/");
   assert.notEqual(alias, join(scripts, "package-release.mjs"));
   assertHelpRuns(alias);
@@ -74,15 +78,15 @@ test("explicit Apple Silicon build cannot select stale default-target output", (
   mkdirSync(join(root, "src-tauri/.cargo"), { recursive: true });
   writeFileSync(join(root, "src-tauri/.cargo/config.toml"), '[build]\ntarget = "x86_64-apple-darwin"\ntarget-dir = "custom-target"\n');
   const stale = join(root, "src-tauri/target/release/bundle/macos/zztodo.app");
-  const expected = join(root, "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/zztodo.app");
   mkdirSync(stale, { recursive: true });
-  mkdirSync(expected, { recursive: true });
   writeFileSync(join(stale, "sentinel"), "stale-default");
-  writeFileSync(join(expected, "sentinel"), "fresh-arm64");
   const inherited = { CARGO_BUILD_TARGET: "x86_64-apple-darwin", CARGO_TARGET_DIR: "/other/cache", APPLE_PASSWORD: "fixture-only", TAURI_SIGNING_PRIVATE_KEY: "fixture-only", KEEP_THIS: "present" };
   const plan = macBuildPlan(root, inherited);
   assert.equal(plan.args[plan.args.indexOf("--target") + 1], "aarch64-apple-darwin");
-  assert.equal(plan.env.CARGO_TARGET_DIR, join(root, "src-tauri/target"));
+  assert.ok(plan.env.CARGO_TARGET_DIR.startsWith(join(root, "src-tauri/target/release-build/")));
+  const expected = join(plan.env.CARGO_TARGET_DIR, "aarch64-apple-darwin/release/bundle/macos/zztodo.app");
+  mkdirSync(expected, { recursive: true });
+  writeFileSync(join(expected, "sentinel"), "fresh-arm64");
   assert.equal(plan.env.CARGO_BUILD_TARGET, undefined);
   assert.equal(plan.env.APPLE_PASSWORD, undefined);
   assert.equal(plan.env.TAURI_SIGNING_PRIVATE_KEY, undefined);
